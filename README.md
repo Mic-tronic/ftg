@@ -2,19 +2,13 @@
 
 # FTG – Flexible Traffic Grapher
 
+**🇩🇪 [Deutsche Version weiter unten ↓](#deutsch)**
+
 **Live SNMP traffic graphs for Windows – one window per interface, dark, small, synchronous.**
-**Live-Verkehrsgraphen per SNMP für Windows – ein Fenster pro Interface, dunkel, schlank, synchron.**
 
 *Missing **STG – SNMP Traffic Grapher**? FTG is a modern, open-source alternative inspired by the classic.*
-*Du vermisst **STG – SNMP Traffic Grapher**? FTG ist eine moderne, quelloffene Alternative nach dem Vorbild des Klassikers.*
-
-[English](#english) · [Deutsch](#deutsch)
 
 ![FTG main window](docs/main.png)
-
----
-
-## English
 
 ### What it is
 FTG shows the live traffic of a network interface as a graph: incoming and outgoing,
@@ -44,7 +38,7 @@ The user interface is in German.
 
 ![Sum of several interfaces](docs/sum.png)
 
-Tray icons / Tray-Symbole (live graph, both filled, paused, error):
+Tray icons (live graph, both filled, paused, error):
 
 ![Tray icons](docs/tray.png)
 
@@ -103,6 +97,10 @@ FTG is not affiliated with Fortinet or with the author of STG.
 ---
 
 ## Deutsch
+
+**Live-Verkehrsgraphen per SNMP für Windows – ein Fenster pro Interface, dunkel, schlank, synchron.**
+
+*Du vermisst **STG – SNMP Traffic Grapher**? FTG ist eine moderne, quelloffene Alternative nach dem Vorbild des Klassikers.*
 
 ### Was ist FTG?
 FTG zeigt den Live-Verkehr eines Netzwerk-Interfaces als Graph: ein- und ausgehend, aktuell /
