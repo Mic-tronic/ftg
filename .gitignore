@@ -1,0 +1,8 @@
+# Laufzeitdaten von FTG – gehören nie ins Repository
+Config/
+*.json
+*.json.lock
+*.log
+*.ico
+*.ico.version
+__pycache__/
