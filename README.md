@@ -53,6 +53,9 @@ Tray icons / Tray-Symbole (live graph, both filled, paused, error):
 - Python 3.11 or newer from python.org (developed with Python 3.14 / Tk 9),
   e.g. `winget install Python.Python.3.14`
 - A device that answers SNMP v2c or v3 (tested with FortiGate and FortiSwitch)
+  – e.g. OPNsense / pfSense, OpenWrt, MikroTik, Ubiquiti, Synology / QNAP, managed switches
+  (TP-Link, Netgear, HPE …) or Linux / Windows servers with an SNMP service. Many consumer
+  routers (e.g. FRITZ!Box) do not offer SNMP.
 
 ### Getting started
 1. Download `ftg.pyw` from the [latest release](../../releases/latest).
@@ -131,6 +134,9 @@ installieren. Die Oberfläche ist deutsch.
 - Python 3.11 oder neuer von python.org (entwickelt mit Python 3.14 / Tk 9),
   z. B. über UniGetUI oder `winget install Python.Python.3.14`
 - Ein Gerät mit SNMP v2c oder v3 (getestet mit FortiGate und FortiSwitch)
+  – z. B. OPNsense / pfSense, OpenWrt, MikroTik, Ubiquiti, Synology / QNAP, verwaltete Switches
+  (TP-Link, Netgear, HPE …) oder Linux- / Windows-Server mit SNMP-Dienst. Viele Heimrouter
+  (z. B. FRITZ!Box) bieten kein SNMP.
 
 ### Loslegen
 1. `ftg.pyw` aus dem [aktuellen Release](../../releases/latest) herunterladen.
