@@ -58,11 +58,14 @@ Tray icons / Tray-Symbole (live graph, both filled, paused, error):
   routers (e.g. FRITZ!Box) do not offer SNMP.
 
 ### Getting started
-1. Download `ftg.pyw` from the [latest release](../../releases/latest).
-2. Start it: `pythonw.exe ftg.pyw WAN` – without an existing configuration the settings dialog
+1. **Install Python first** – FTG is a Python script, Windows does not include Python.
+   Python 3.11 or newer from python.org, e.g. `winget install Python.Python.3.14`
+   (or via UniGetUI). Afterwards `.pyw` files start with a double-click.
+2. Download `ftg.pyw` from the [latest release](../../releases/latest).
+3. Start it: `pythonw.exe ftg.pyw WAN` – without an existing configuration the settings dialog
    opens. Enter host, SNMP version and credentials, click **Abfragen** (query), pick the
    interface, **OK**.
-3. Right-click the graph for the menu: more windows, tray mode, arrange windows,
+4. Right-click the graph for the menu: more windows, tray mode, arrange windows,
    shortcuts for desktop or autostart.
 
 ### Example: SNMPv3 user on a FortiGate
@@ -139,11 +142,14 @@ installieren. Die Oberfläche ist deutsch.
   (z. B. FRITZ!Box) bieten kein SNMP.
 
 ### Loslegen
-1. `ftg.pyw` aus dem [aktuellen Release](../../releases/latest) herunterladen.
-2. Starten: `pythonw.exe ftg.pyw WAN` – ohne vorhandene Konfiguration öffnen sich die
+1. **Zuerst Python installieren** – FTG ist ein Python-Skript, Windows bringt Python nicht mit.
+   Python 3.11 oder neuer von python.org, z. B. über UniGetUI oder
+   `winget install Python.Python.3.14`. Danach starten `.pyw`-Dateien per Doppelklick.
+2. `ftg.pyw` aus dem [aktuellen Release](../../releases/latest) herunterladen.
+3. Starten: `pythonw.exe ftg.pyw WAN` – ohne vorhandene Konfiguration öffnen sich die
    Einstellungen. Host, SNMP-Version und Zugangsdaten eintragen, **Abfragen** klicken,
    Interface wählen, **OK**.
-3. Rechtsklick in den Graph öffnet das Menü: weitere Fenster, Tray-Modus, Fenster anordnen,
+4. Rechtsklick in den Graph öffnet das Menü: weitere Fenster, Tray-Modus, Fenster anordnen,
    Verknüpfungen für Desktop oder Autostart.
 
 ### Beispiel: SNMPv3-Benutzer auf einer FortiGate
