@@ -4,6 +4,17 @@ Version number in `ftg.pyw` (`VERSION`), shown in the settings dialog, briefly a
 in `ftg.log`. / Die Versionsnummer steht in `ftg.pyw` (`VERSION`), im Einstellungsfenster,
 kurz beim Start und im `ftg.log`.
 
+## 1.11.0 – 2026-11-05 – backup copies / Sicherungskopien
+- EN: “Save configuration” is gone (settings are saved automatically anyway). New in the context menu:
+  “Save backup copy” puts a copy into the subfolder `Backup` of the configuration folder,
+  “Restore backup copy” lists the copies of this window (newest first) and restores one, including
+  position and size; the current state is backed up first. Changing the configuration folder is logged.
+- DE: „Konfiguration speichern“ entfällt (gespeichert wird ohnehin automatisch). Neu im Kontextmenü:
+  „Sicherungskopie speichern“ legt eine Kopie im Unterordner `Backup` des Konfigurationsordners ab,
+  „Sicherungskopie wiederherstellen“ listet die Kopien dieses Fensters (neueste zuerst) und stellt eine
+  wieder her, samt Position und Größe; der jetzige Stand wird vorher gesichert. Ein Wechsel des
+  Konfigurationsordners steht im Log.
+
 ## 1.10.0 – 2026-11-04 – English user interface / englische Oberfläche
 - EN: The user interface is now available in English and German. The language follows Windows
   (German → German, any other language → English) and can be set in the settings

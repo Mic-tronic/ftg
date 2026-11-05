@@ -33,8 +33,8 @@ Windows language, switchable in the settings.
 - **Tray mode** with a tiny live graph as tray icon, borderless mode, always on top
 - **Window and background opacity** – e.g. curves only, on a 40 % background
 - **Arrange windows** (↓ ↑ → ←) and copy the window size between running windows
-- Configurations as JSON, optionally on a network share; SNMPv3 passwords protected with
-  Windows DPAPI
+- Configurations as JSON, optionally on a network share, saved automatically; backup copies
+  can be saved and restored from the menu; SNMPv3 passwords protected with Windows DPAPI
 - Desktop / autostart shortcuts with FTG's own icon, created from the menu
 
 ![Sum of several interfaces](docs/sum.png)
@@ -126,7 +126,8 @@ Windows-Sprache, umschaltbar in den Einstellungen.
 - **Tray-Modus** mit kleinem Live-Graph als Symbol, Modus ohne Titelleiste, immer im Vordergrund
 - **Deckkraft für Fenster und Hintergrund** – z. B. nur die Kurven auf 40 % Hintergrund
 - **Fenster anordnen** (↓ ↑ → ←) und Fenstergröße zwischen laufenden Fenstern übertragen
-- Konfigurationen als JSON, auf Wunsch auf einem Netzlaufwerk; SNMPv3-Passwörter per
+- Konfigurationen als JSON, auf Wunsch auf einem Netzlaufwerk, automatisch gespeichert;
+  Sicherungskopien lassen sich im Menü speichern und wiederherstellen; SNMPv3-Passwörter per
   Windows-DPAPI geschützt
 - Verknüpfungen für Desktop und Autostart mit eigenem Symbol, direkt aus dem Menü
 

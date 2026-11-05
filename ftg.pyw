@@ -47,7 +47,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 
 APP = "FTG"
-VERSION = "1.10.0"         # Aenderungen: CHANGELOG.md
+VERSION = "1.11.0"         # Aenderungen: CHANGELOG.md
 APP_LONG = "FTG – Flexible Traffic Grapher"
 LOGNAME = "ftg.log"
 
@@ -117,6 +117,8 @@ FILL_MODES = (("in", "In gefüllt"), ("out", "Out gefüllt"), ("both", "Beide ge
 # Oberflaeche deutsch oder englisch: Texte stehen im Code auf Deutsch, T() liefert bei
 # englischer Oberflaeche die Uebersetzung aus EN (fehlt sie, bleibt der deutsche Text).
 # Die Wahl steht in settings.cfg ("language": auto/de/en), auto = Sprache von Windows.
+BACKUP_DIR = "Backup"     # Unterordner des Konfigurationsordners fuer Sicherungskopien
+
 LANG = "de"
 LANG_CHOICES = (("auto", "Automatisch (Windows-Sprache)"), ("de", "Deutsch"), ("en", "English"))
 
@@ -160,7 +162,19 @@ EN = {
     "Zeitraum": "Time range", "Füllung": "Fill", "Immer im Vordergrund": "Always on top",
     "Ohne Titelleiste": "Borderless", "Nur im Infobereich (Tray)": "Notification area only (tray)",
     "Fenster anordnen": "Arrange windows", "Fenstergröße übernehmen für": "Copy window size to",
-    "Weiteres Fenster öffnen": "Open another window", "Konfiguration speichern": "Save configuration",
+    "Weiteres Fenster öffnen": "Open another window",
+    "Sicherungskopie speichern": "Save backup copy",
+    "Sicherungskopie wiederherstellen": "Restore backup copy",
+    "Sicherungskopie gespeichert: {name}": "Backup copy saved: {name}",
+    "Sicherungskopie nicht gespeichert: {e}": "Backup copy not saved: {e}",
+    "Keine Sicherungskopien von „{name}“": "No backup copies of “{name}”",
+    "Backup-Ordner öffnen": "Open backup folder",
+    "Stand vom {when}": "State of {when}",
+    "„{name}“ auf den Stand vom {when} zurücksetzen?\n\n"
+    "Die jetzigen Einstellungen werden vorher ebenfalls als Sicherungskopie gespeichert.":
+        "Reset “{name}” to the state of {when}?\n\n"
+        "The current settings are saved as a backup copy first.",
+    "Sicherungskopie nicht lesbar: {e}": "Backup copy not readable: {e}",
     "Konfiguration in diesem Fenster laden": "Load configuration in this window",
     "Konfigurationsordner": "Configuration folder", "Verknüpfung": "Shortcut", "Beenden": "Exit",
     "{name}  ➜  neues Fenster": "{name}  ➜  new window", "   (schon offen)": "   (already open)",
@@ -2164,8 +2178,16 @@ class App:
         self.load_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                  activeforeground="white", bd=0, font=FONT,
                                  postcommand=self.fill_load_menu)
-        self.menu.add_command(label=T("Konfiguration speichern"), command=lambda: self.save(show=True))
         self.menu.add_cascade(label=T("Konfiguration in diesem Fenster laden"), menu=self.load_menu)
+        self.menu.add_separator()
+        # Gespeichert wird ohnehin bei jeder Aenderung; hier gibt es Sicherungskopien im
+        # Unterordner "Backup" des Konfigurationsordners, um versehentliche Aenderungen
+        # rueckgaengig machen zu koennen.
+        self.menu.add_command(label=T("Sicherungskopie speichern"), command=self.make_backup)
+        self.backup_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
+                                   activeforeground="white", bd=0, font=FONT,
+                                   disabledforeground=FG_DIM, postcommand=self.fill_backup_menu)
+        self.menu.add_cascade(label=T("Sicherungskopie wiederherstellen"), menu=self.backup_menu)
         self.menu.add_separator()
         self.dir_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                 activeforeground="white", bd=0, font=FONT,
@@ -2558,6 +2580,116 @@ class App:
         self.update_labels()
         return err is None
 
+    # ------------------------------------------------------------ Sicherungskopien
+    def backup_dir(self):
+        return os.path.join(os.path.dirname(self.cfg_path), BACKUP_DIR)
+
+    def list_backups(self):
+        """Sicherungskopien dieser Konfiguration, neueste zuerst: [(Pfad, Zeitpunkt-Text)]."""
+        pre = config_name(self.cfg_path) + "_"
+        out = []
+        try:
+            names = os.listdir(self.backup_dir())
+        except OSError:
+            return out
+        for fn in names:
+            if not (fn.startswith(pre) and fn.lower().endswith(".json")):
+                continue
+            stamp = fn[len(pre):-5]
+            try:
+                t = time.strptime(stamp[:17], "%Y-%m-%d_%H%M%S")   # evtl. mit Zusatz "-2"
+            except ValueError:
+                continue
+            out.append((os.path.join(self.backup_dir(), fn), t))
+        out.sort(key=lambda e: (e[1], len(e[0]), e[0]), reverse=True)
+        fmt = "%d.%m.%Y %H:%M:%S" if LANG == "de" else "%Y-%m-%d %H:%M:%S"
+        return [(p, time.strftime(fmt, t)) for p, t in out]
+
+    def make_backup(self, quiet=False):
+        """Aktuellen Stand speichern und als Kopie nach Backup/<Name>_<Zeit>.json legen."""
+        if not self.save():
+            return None
+        base = os.path.join(self.backup_dir(), f"{config_name(self.cfg_path)}_"
+                                               f"{time.strftime('%Y-%m-%d_%H%M%S')}")
+        dst, k = base + ".json", 1
+        while os.path.exists(dst):      # zwei Kopien in derselben Sekunde
+            k += 1
+            dst = f"{base}-{k}.json"
+        try:
+            if not os.path.isdir(self.backup_dir()):
+                os.mkdir(self.backup_dir())
+            with open(self.cfg_path, "rb") as f:
+                data = f.read()
+            tmp = dst + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, dst)
+        except OSError as e:
+            write_log(self.cfg_path, f"Sicherungskopie fehlgeschlagen: {e}")
+            self.error = T("Sicherungskopie nicht gespeichert: {e}", e=e)
+            self.update_labels()
+            return None
+        write_log(self.cfg_path, f"Sicherungskopie {dst}")
+        if not quiet:
+            self.flash = T("Sicherungskopie gespeichert: {name}",
+                           name=f"{BACKUP_DIR}{os.sep}{os.path.basename(dst)}")
+            self.root.after(6000, self._end_flash)
+            self.update_labels()
+        return dst
+
+    def fill_backup_menu(self):
+        m = self.backup_menu
+        m.delete(0, "end")
+        backups = self.list_backups()
+        for path, when in backups[:20]:
+            m.add_command(label=T("Stand vom {when}", when=when),
+                          state="disabled" if self.readonly else "normal",
+                          command=lambda p=path, w=when: self.restore_backup(p, w))
+        if not backups:
+            m.add_command(label=T("Keine Sicherungskopien von „{name}“", name=config_name(self.cfg_path)),
+                          state="disabled")
+        m.add_separator()
+        m.add_command(label=T("Backup-Ordner öffnen"), command=self.open_backup_folder,
+                      state="normal" if backups and sys.platform == "win32" else "disabled")
+
+    def restore_backup(self, path, when):
+        from tkinter import messagebox
+        self.ensure_visible()
+        if not messagebox.askyesno(
+                APP, T("„{name}“ auf den Stand vom {when} zurücksetzen?\n\n"
+                       "Die jetzigen Einstellungen werden vorher ebenfalls als Sicherungskopie gespeichert.",
+                       name=config_name(self.cfg_path), when=when), parent=self.root):
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                json.load(f)
+        except (OSError, ValueError) as e:
+            self.error = T("Sicherungskopie nicht lesbar: {e}", e=e)
+            self.update_labels()
+            return
+        if self.make_backup(quiet=True) is None:
+            return
+        # Die Kopie komplett uebernehmen – auch Position und Groesse – und ohne erneutes
+        # Speichern neu starten (sonst schriebe on_close die jetzige Position zurueck)
+        cfg = load_config(path)
+        err = save_config(self.cfg_path, cfg)
+        if err:
+            self.error = err
+            self.update_labels()
+            return
+        self.cfg = cfg
+        self._no_save_on_close = True
+        write_log(self.cfg_path, f"wiederhergestellt aus {path} – Fenster startet neu")
+        self.restart()
+
+    def open_backup_folder(self):
+        try:
+            if sys.platform == "win32":
+                os.startfile(real_path(self.backup_dir()))
+        except OSError as e:
+            self.error = str(e)
+            self.update_labels()
+
     def _end_flash(self):
         self.flash = ""
         self.update_labels()
@@ -2772,6 +2904,8 @@ class App:
         if err:
             messagebox.showerror(APP, err, parent=self.root)
             return
+        for d in (old_dir, new_dir):      # in beiden Ordnern nachvollziehbar
+            write_log(os.path.join(d, name + ".json"), f"Konfigurationsordner gewechselt: {old_dir} -> {new_dir}")
         if self.switch_config(target):
             self.flash = T("Konfigurationsordner gewechselt")
             self.root.after(6000, self._end_flash)
@@ -2866,7 +3000,7 @@ class App:
             self.update_tray()
 
     def on_close(self):
-        if not self.readonly:
+        if not self.readonly and not getattr(self, "_no_save_on_close", False):
             self.save()
         write_log(self.cfg_path, "Ende")
         self.stop()
