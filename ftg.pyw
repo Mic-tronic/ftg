@@ -16,6 +16,8 @@ Summe mehrerer Interfaces, Live-Graph fuer ein- und ausgehenden Verkehr.
       pythonw ftg.pyw "C:\Pfad\zu\lan.json"
 * Konfigurationen unter %APPDATA%\FTG\ oder in einem frei waehlbaren Ordner
   (z. B. Netzlaufwerk); SNMPv3-Passwoerter per Windows-DPAPI geschuetzt
+* Oberflaeche deutsch oder englisch: automatisch nach der Windows-Sprache (Deutsch ->
+  deutsch, sonst englisch), umschaltbar in den Einstellungen (Feld "Sprache")
 
 Bedienung: Doppelklick in den Graphen = Einstellungen, Rechtsklick = Menue.
 Mausrad oder Pfeiltasten = zurueckblaettern (Anzeige haelt an, gemessen wird
@@ -45,7 +47,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 
 APP = "FTG"
-VERSION = "1.9.0"         # Aenderungen: CHANGELOG.md
+VERSION = "1.10.0"         # Aenderungen: CHANGELOG.md
 APP_LONG = "FTG – Flexible Traffic Grapher"
 LOGNAME = "ftg.log"
 
@@ -110,6 +112,187 @@ HISTORY = 3600            # so viele Sekunden werden immer im Speicher gehalten
 ZOOM_STEPS = (60, 120, 300, 600, 900, 1800, 3600)
 FILL_MODES = (("in", "In gefüllt"), ("out", "Out gefüllt"), ("both", "Beide gefüllt"),
               ("none", "Keine Füllung"))
+
+# ---------------------------------------------------------------- Sprache
+# Oberflaeche deutsch oder englisch: Texte stehen im Code auf Deutsch, T() liefert bei
+# englischer Oberflaeche die Uebersetzung aus EN (fehlt sie, bleibt der deutsche Text).
+# Die Wahl steht in settings.cfg ("language": auto/de/en), auto = Sprache von Windows.
+LANG = "de"
+LANG_CHOICES = (("auto", "Automatisch (Windows-Sprache)"), ("de", "Deutsch"), ("en", "English"))
+
+
+def T(text, **kw):
+    if LANG == "en":
+        text = EN.get(text, text)
+    return text.format(**kw) if kw else text
+
+
+def detect_lang():
+    """'de', wenn Windows (bzw. die Umgebung) deutsch eingestellt ist, sonst 'en'."""
+    try:
+        if sys.platform == "win32":
+            lid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            return "de" if (lid & 0x3FF) == 0x07 else "en"
+        import locale
+        loc = (os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG")
+               or locale.getlocale()[0] or "")
+        return "de" if loc.lower().startswith("de") else "en"
+    except Exception:
+        return "en"
+
+
+def init_lang(pref=None):
+    global LANG
+    if pref is None:
+        pref = load_settings().get("language", "auto")
+    LANG = pref if pref in ("de", "en") else detect_lang()
+    return LANG
+
+
+EN = {
+    # Fuellung / Menues
+    "In gefüllt": "In filled", "Out gefüllt": "Out filled", "Beide gefüllt": "Both filled",
+    "Keine Füllung": "No fill",
+    "Fenster ausblenden": "Hide window", "Fenster anzeigen": "Show window",
+    "Fenster ausblenden (nur im Tray-Modus)": "Hide window (tray mode only)",
+    "Einstellungen …": "Settings …", "Pause": "Pause", "Fortsetzen": "Resume",
+    "Pause-Taste": "Pause key", "Statistik zurücksetzen": "Reset statistics",
+    "Zeitraum": "Time range", "Füllung": "Fill", "Immer im Vordergrund": "Always on top",
+    "Ohne Titelleiste": "Borderless", "Nur im Infobereich (Tray)": "Notification area only (tray)",
+    "Fenster anordnen": "Arrange windows", "Fenstergröße übernehmen für": "Copy window size to",
+    "Weiteres Fenster öffnen": "Open another window", "Konfiguration speichern": "Save configuration",
+    "Konfiguration in diesem Fenster laden": "Load configuration in this window",
+    "Konfigurationsordner": "Configuration folder", "Verknüpfung": "Shortcut", "Beenden": "Exit",
+    "{name}  ➜  neues Fenster": "{name}  ➜  new window", "   (schon offen)": "   (already open)",
+    "Neue Konfiguration": "New configuration",
+    "{name}  ⟲  hier laden (ersetzt dieses Fenster)": "{name}  ⟲  load here (replaces this window)",
+    "Datei wählen …": "Choose file …", "Konfiguration laden": "Load configuration",
+    "Nur unter Windows verfügbar": "Windows only",
+    "„{name}“ auf den Desktop": "“{name}” on the desktop",
+    "„{name}“ in den Autostart": "“{name}” in autostart", "  (aktualisieren)": "  (update)",
+    "„{name}“ aus dem Autostart entfernen": "Remove “{name}” from autostart",
+    "Autostart-Ordner öffnen": "Open autostart folder",
+    "Verknüpfung erstellt:\n{info}\n\nStartet:\n{target} {args}":
+        "Shortcut created:\n{info}\n\nStarts:\n{target} {args}",
+    "Verknüpfung konnte nicht erstellt werden:\n\n{info}": "Could not create shortcut:\n\n{info}",
+    "Aus dem Autostart entfernt": "Removed from autostart",
+    "Im Explorer öffnen": "Open in Explorer", "Anderen Ordner wählen …": "Choose another folder …",
+    "Zurück auf Standard (AppData)": "Back to default (AppData)",
+    "Konfigurationsordner wählen": "Choose configuration folder",
+    "Ordner nicht erreichbar:\n{d}": "Folder not reachable:\n{d}",
+    "Im neuen Ordner gibt es schon „{name}“.\n\nJa: diese Konfiguration von dort laden\n"
+    "Nein: mit der aktuellen Konfiguration überschreiben":
+        "“{name}” already exists in the new folder.\n\nYes: load that configuration\n"
+        "No: overwrite it with the current configuration",
+    "Sollen auch die übrigen Konfigurationen in den neuen Ordner kopiert werden?\n\n":
+        "Copy the other configurations to the new folder as well?\n\n",
+    "Konfigurationsordner gewechselt": "Configuration folder changed",
+    "Zurück zu „jetzt“": "Back to “now”", "Ende": "End",
+    "Mausrad = blättern, Shift+Mausrad = Zeitraum": "Wheel = scroll, Shift+wheel = time range",
+    "↓  darunter": "↓  below", "↑  darüber": "↑  above", "→  rechts daneben": "→  to the right",
+    "←  links daneben": "←  to the left",
+    "Dieses Fenster gibt Position und Größe vor; offen: ": "This window sets position and size; open: ",
+    "Keine weiteren Fenster offen": "No other windows open",
+    "Keine weiteren Konfigurationen": "No other configurations", "   (offen)": "   (open)",
+    "alle": "all", "keine": "none",
+    "{n} Fenster angeordnet": "{n} windows arranged",
+    " – Stapel verschoben, damit alles auf den Monitor passt":
+        " – stack moved so that everything fits on the monitor",
+    "{n} Fenster angeordnet – der Monitor ist dafür zu klein, sie wurden an den Rand geschoben":
+        "{n} windows arranged – the monitor is too small, they were moved to the edge",
+    "Größe {w} × {h} übernommen: {names}": "Size {w} × {h} applied: {names}",
+    "Nichts geändert": "Nothing changed",
+    # Anzeige
+    "Gespeichert: {name}": "Saved: {name}", "Pausiert": "Paused", " (nur Ansicht)": " (view only)",
+    "alle {i} s": "every {i} s", "{kind}-Zähler": "{kind} counters", "jetzt": "now",
+    "◀ zurückgeblättert {span}  ·  Ende = jetzt": "◀ scrolled back {span}  ·  End = now",
+    "warte auf Daten …": "waiting for data …",
+    "Infobereich nicht verfügbar: {e}": "Notification area not available: {e}",
+    "{n} Interfaces, z. B. {x}": "{n} interfaces, e.g. {x}",
+    "Konfiguration geschrieben, aber beim Gegenlesen anders – bitte melden":
+        "Configuration written, but it differs when read back – please report",
+    "Konfiguration nicht gespeichert: Ordner nicht erreichbar ({d})":
+        "Configuration not saved: folder not reachable ({d})",
+    "Konfiguration nicht gespeichert: {e}": "Configuration not saved: {e}",
+    "Konfigurationsordner nicht erreichbar: {d} – Rechtsklick → Konfigurationsordner wählen":
+        "Configuration folder not reachable: {d} – right-click → Configuration folder",
+    "Diese Konfiguration ist schon in einem anderen Fenster offen – hier wird nichts gespeichert":
+        "This configuration is already open in another window – nothing is saved here",
+    "Verknüpfungen gibt es nur unter Windows": "Shortcuts are only available on Windows",
+    "Interner Fehler:\n\n{val}\n\nDetails stehen in {log}": "Internal error:\n\n{val}\n\nDetails are in {log}",
+    # SNMP
+    "SNMPv3: Sicherheitsstufe wird vom Gerät nicht unterstützt":
+        "SNMPv3: security level not supported by the device",
+    "SNMPv3: Benutzername unbekannt": "SNMPv3: unknown user name",
+    "SNMPv3: Anmeldung abgelehnt – Auth-Passwort oder -Verfahren falsch":
+        "SNMPv3: authentication failed – wrong auth password or protocol",
+    "SNMPv3: Entschlüsselung fehlgeschlagen – Priv-Passwort oder -Verfahren falsch":
+        "SNMPv3: decryption failed – wrong priv password or protocol",
+    "SNMPv3: Passwort fehlt": "SNMPv3: password missing",
+    "SNMPv3: unbekanntes Auth-Verfahren {x}": "SNMPv3: unknown auth protocol {x}",
+    "SNMPv3: unbekanntes Priv-Verfahren {x}": "SNMPv3: unknown priv protocol {x}",
+    "SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben":
+        "SNMPv3: auth password must have at least 8 characters",
+    "SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben":
+        "SNMPv3: priv password must have at least 8 characters",
+    "keine SNMPv3-Antwort": "no SNMPv3 response",
+    "SNMPv3: Antwort mit unerwarteter Anmeldung": "SNMPv3: response with unexpected authentication",
+    "SNMPv3: Prüfsumme der Antwort falsch": "SNMPv3: response checksum wrong",
+    "SNMPv3: verschlüsselte Antwort, aber kein Priv-Schlüssel":
+        "SNMPv3: encrypted response, but no priv key",
+    "Host nicht auflösbar: {host}": "Cannot resolve host: {host}",
+    "Netzwerkfehler: {e}": "Network error: {e}", "SNMP-Fehlerstatus {err}": "SNMP error status {err}",
+    "Keine Antwort (Timeout) – Community, ACL oder allowaccess prüfen":
+        "No response (timeout) – check community, ACL or allowaccess",
+    "SNMPv3: keine Antwort auf die Erkennung – Host, Port, SNMPv3-Freigabe auf dem Gerät prüfen":
+        "SNMPv3: no response to discovery – check host, port and SNMPv3 access on the device",
+    "SNMPv3: Gerät meldet keine Engine-ID": "SNMPv3: device reports no engine ID",
+    "SNMPv3: keine Antwort (Timeout) – Benutzer, Passwörter, Sicherheitsstufe und Freigabe prüfen":
+        "SNMPv3: no response (timeout) – check user, passwords, security level and access",
+    "SNMPv3-Fehlermeldung {x}": "SNMPv3 report {x}",
+    "SNMPv3: Zeitabgleich mit dem Gerät gescheitert": "SNMPv3: time synchronisation with the device failed",
+    "SNMPv3-Passwort ist hier nicht lesbar (anderer Benutzer oder PC?) – bitte in den Einstellungen neu eingeben":
+        "SNMPv3 password cannot be read here (other user or PC?) – please enter it again in the settings",
+    "Keine Interfaces gefunden": "No interfaces found",
+    "Interface-Index {idx} liefert keine Zähler": "Interface index {idx} returns no counters",
+    "Zähler nicht lesbar": "Counters not readable",
+    # Einstellungen
+    "Einstellungen": "Settings", "Name": "Name", "Host / IP": "Host / IP", "Port": "Port",
+    "Summe mehrerer Interfaces": "Sum of several interfaces", "Abfragen": "Query",
+    "Kopieren": "Copy", "Intervall (s)": "Interval (s)", "Zeitraum (s)": "Time range (s)",
+    "auch per Shift+Mausrad oder Kippen": "also via Shift+wheel or tilt", "Einheit": "Unit",
+    "Farben": "Colours", "Standard": "Default", "Name im Graph": "Name in graph",
+    "oben links anzeigen": "show top left", "beide": "both", "Hintergrund": "Background",
+    "nur Hintergrund, Kurven bleiben voll": "background only, curves stay opaque",
+    "Deckkraft": "Opacity", "ganzes Fenster": "whole window",
+    "unter der Maus voll deckend": "fully opaque under the mouse", "Abbrechen": "Cancel",
+    "Version 2c (Community)": "Version 2c (community)",
+    "Version 3 (Benutzer, verschlüsselt)": "Version 3 (user, encrypted)",
+    "Benutzer": "User", "Anmeldung": "Authentication", "Verschlüsselung": "Encryption",
+    "Passwörter anzeigen": "Show passwords",
+    "SNMPv3: Benutzername fehlt.": "SNMPv3: user name missing.",
+    "SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben.":
+        "SNMPv3: auth password must have at least 8 characters.",
+    "SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben.":
+        "SNMPv3: priv password must have at least 8 characters.",
+    "{n} gewählt": "{n} selected",
+    "Zum Auswählen erst „Abfragen“ klicken.": "Click “Query” first to choose.",
+    "Farbe für {x}": "Colour for {x}", "Kopiert: {x}": "Copied: {x}",
+    "Bitte zuerst Host angeben.": "Please enter a host first.", "Port ist keine Zahl.": "Port is not a number.",
+    "Frage Interfaces ab …": "Querying interfaces …", "{n} Interfaces gefunden.": "{n} interfaces found.",
+    "Port, Intervall und Zeitraum müssen Zahlen sein.": "Port, interval and time range must be numbers.",
+    "Für die Summe mindestens ein Interface ankreuzen.": "Tick at least one interface for the sum.",
+    "Host und Interface müssen gesetzt sein.": "Host and interface must be set.",
+    "Intervall ≥ 0,2 s, Zeitraum ≥ 10 s, höchstens 20000 Messpunkte.":
+        "Interval ≥ 0.2 s, time range ≥ 10 s, at most 20000 data points.",
+    "Name: 1–40 Zeichen, nur Buchstaben, Ziffern, Leerzeichen, - und _.":
+        "Name: 1–40 characters, only letters, digits, spaces, - and _.",
+    "Eine Konfiguration „{name}“ gibt es schon.": "A configuration “{name}” already exists.",
+    "„{name}“ ist gerade in einem anderen Fenster offen.": "“{name}” is currently open in another window.",
+    "Summe {n} Interfaces": "Sum of {n} interfaces",
+    "Sprache": "Language", "Automatisch (Windows-Sprache)": "Automatic (Windows language)",
+    "neu": "new",
+}
 
 
 # ====================================================================
@@ -311,7 +494,7 @@ def v3_password_key(password, hash_name):
     import hashlib
     pw = password.encode("utf-8")
     if not pw:
-        raise SnmpError("SNMPv3: Passwort fehlt")
+        raise SnmpError(T("SNMPv3: Passwort fehlt"))
     data = (pw * (1048576 // len(pw) + 1))[:1048576]
     return hashlib.new(hash_name, data).digest()
 
@@ -358,13 +541,13 @@ class SnmpV3:
         self.auth = None if auth in (None, "", "keine") else auth
         self.priv = None if (priv in (None, "", "keine") or not self.auth) else priv
         if self.auth and self.auth not in V3_AUTH:
-            raise SnmpError(f"SNMPv3: unbekanntes Auth-Verfahren {auth}")
+            raise SnmpError(T("SNMPv3: unbekanntes Auth-Verfahren {x}", x=auth))
         if self.priv and self.priv != "AES-128":
-            raise SnmpError(f"SNMPv3: unbekanntes Priv-Verfahren {priv}")
+            raise SnmpError(T("SNMPv3: unbekanntes Priv-Verfahren {x}", x=priv))
         if self.auth and len(auth_pw) < 8:
-            raise SnmpError("SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben")
+            raise SnmpError(T("SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben"))
         if self.priv and len(priv_pw) < 8:
-            raise SnmpError("SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben")
+            raise SnmpError(T("SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben"))
         self._auth_pw, self._priv_pw = auth_pw, priv_pw
         self.engine_id = None
         self.boots = 0
@@ -431,7 +614,7 @@ class SnmpV3:
         _, s, e = _dec_pos(data, 0)
         _, a, b = _dec_pos(data, s)                         # Version
         if int.from_bytes(data[a:b], "big") != 3:
-            raise SnmpError("keine SNMPv3-Antwort")
+            raise SnmpError(T("keine SNMPv3-Antwort"))
         _, gs, ge = _dec_pos(data, b)                       # msgGlobalData
         _, a, b2 = _dec_pos(data, gs)
         msg_id = int.from_bytes(data[a:b2], "big", signed=True)
@@ -453,16 +636,16 @@ class SnmpV3:
         priv_params = data[fields[5][0]:fields[5][1]]
         if flags & 1:
             if not self.auth or eid != self.engine_id:
-                raise SnmpError("SNMPv3: Antwort mit unerwarteter Anmeldung")
+                raise SnmpError(T("SNMPv3: Antwort mit unerwarteter Anmeldung"))
             import hmac
             plain = data[:aa] + b"\0" * (ab - aa) + data[ab:]
             mac = hmac.new(self.k_auth, plain, V3_AUTH[self.auth][0]).digest()[:ab - aa]
             if not hmac.compare_digest(mac, data[aa:ab]):
-                raise SnmpError("SNMPv3: Prüfsumme der Antwort falsch")
+                raise SnmpError(T("SNMPv3: Prüfsumme der Antwort falsch"))
         tag, ms, me = _dec_pos(data, ue)                    # msgData
         if flags & 2:
             if tag != 0x04 or not self.k_priv:
-                raise SnmpError("SNMPv3: verschlüsselte Antwort, aber kein Priv-Schlüssel")
+                raise SnmpError(T("SNMPv3: verschlüsselte Antwort, aber kein Priv-Schlüssel"))
             iv = boots.to_bytes(4, "big") + etime.to_bytes(4, "big") + priv_params
             scoped = aes_cfb(self.k_priv, iv, data[ms:me], decrypt=True)
             _, s2, _ = _dec_pos(scoped, 0)
@@ -487,7 +670,7 @@ class SnmpClient:
         try:
             info = socket.getaddrinfo(host, port, 0, socket.SOCK_DGRAM)[0]
         except socket.gaierror as e:
-            raise SnmpError(f"Host nicht auflösbar: {host}") from e
+            raise SnmpError(T("Host nicht auflösbar: {host}", host=host)) from e
         self.addr = info[4]
         self.sock = socket.socket(info[0], socket.SOCK_DGRAM)
         self.community = community
@@ -519,7 +702,7 @@ class SnmpClient:
                 except socket.timeout:
                     break
                 except OSError as e:
-                    raise SnmpError(f"Netzwerkfehler: {e}") from e
+                    raise SnmpError(T("Netzwerkfehler: {e}", e=e)) from e
                 try:
                     r, err, vbs = parse_response(data)
                 except Exception:
@@ -527,9 +710,9 @@ class SnmpClient:
                 if r != rid:
                     continue
                 if err:
-                    raise SnmpError(f"SNMP-Fehlerstatus {err}")
+                    raise SnmpError(T("SNMP-Fehlerstatus {err}", err=err))
                 return vbs
-        raise SnmpError("Keine Antwort (Timeout) – Community, ACL oder allowaccess prüfen")
+        raise SnmpError(T("Keine Antwort (Timeout) – Community, ACL oder allowaccess prüfen"))
 
     def _exchange_v3(self, pdu_type, oids, discovery=False):
         """Ein Versuch mit Wiederholungen bei Zeitueberschreitung.
@@ -551,7 +734,7 @@ class SnmpClient:
                 except socket.timeout:
                     break
                 except OSError as e:
-                    raise SnmpError(f"Netzwerkfehler: {e}") from e
+                    raise SnmpError(T("Netzwerkfehler: {e}", e=e)) from e
                 try:
                     m, tag, r, err, vbs = v3.parse(data)
                 except SnmpError:
@@ -569,24 +752,24 @@ class SnmpClient:
             if not v3.ready:                     # Engine-ID, Boots und Uhr des Agenten holen
                 res = self._exchange_v3(0xA0, [], discovery=True)
                 if res is None:
-                    raise SnmpError("SNMPv3: keine Antwort auf die Erkennung – Host, Port, "
-                                    "SNMPv3-Freigabe auf dem Gerät prüfen")
+                    raise SnmpError(T("SNMPv3: keine Antwort auf die Erkennung – Host, Port, "
+                                      "SNMPv3-Freigabe auf dem Gerät prüfen"))
                 if not v3.ready:
-                    raise SnmpError("SNMPv3: Gerät meldet keine Engine-ID")
+                    raise SnmpError(T("SNMPv3: Gerät meldet keine Engine-ID"))
             res = self._exchange_v3(pdu_type, oids)
             if res is None:
-                raise SnmpError("SNMPv3: keine Antwort (Timeout) – Benutzer, Passwörter, "
-                                "Sicherheitsstufe und Freigabe prüfen")
+                raise SnmpError(T("SNMPv3: keine Antwort (Timeout) – Benutzer, Passwörter, "
+                                  "Sicherheitsstufe und Freigabe prüfen"))
             tag, err, vbs = res
             if tag == 0xA8:                          # Report
                 oid = vbs[0][0] if vbs else ""
                 if oid in (_USM_NOT_IN_TIME, _USM_UNKNOWN_ENGINE):
                     continue                         # Uhr/Engine uebernommen -> nochmal
-                raise SnmpError(_USM_REPORTS.get(oid, f"SNMPv3-Fehlermeldung {oid}"))
+                raise SnmpError(T(_USM_REPORTS[oid]) if oid in _USM_REPORTS else T("SNMPv3-Fehlermeldung {x}", x=oid))
             if err:
-                raise SnmpError(f"SNMP-Fehlerstatus {err}")
+                raise SnmpError(T("SNMP-Fehlerstatus {err}", err=err))
             return vbs
-        raise SnmpError("SNMPv3: Zeitabgleich mit dem Gerät gescheitert")
+        raise SnmpError(T("SNMPv3: Zeitabgleich mit dem Gerät gescheitert"))
 
     def get(self, oids):
         return self._request(0xA0, oids)
@@ -658,8 +841,8 @@ def reveal_secret(stored):
         if stored.startswith("b64:"):
             return base64.b64decode(stored[4:]).decode("utf-8")
     except (OSError, ValueError) as e:
-        raise SnmpError("SNMPv3-Passwort ist hier nicht lesbar (anderer Benutzer oder PC?) – "
-                        "bitte in den Einstellungen neu eingeben") from e
+        raise SnmpError(T("SNMPv3-Passwort ist hier nicht lesbar (anderer Benutzer oder PC?) – "
+                          "bitte in den Einstellungen neu eingeben")) from e
     return stored                                    # Klartext (von Hand eingetragen)
 
 
@@ -693,7 +876,7 @@ def list_interfaces(client):
             return {}
     names = table(OID_IFNAME) or table(OID_IFDESCR)
     if not names:
-        raise SnmpError("Keine Interfaces gefunden")
+        raise SnmpError(T("Keine Interfaces gefunden"))
     aliases = table(OID_IFALIAS)
     return [(i, names[i], aliases.get(i, "")) for i in sorted(names)]
 
@@ -708,7 +891,7 @@ def detect_counters(client, idx):
     vbs = client.get([f"{OID_IN32}.{idx}", f"{OID_OUT32}.{idx}"])
     if all(t == 0x41 for _, t, _ in vbs):
         return [o for o, _, _ in vbs], 2**32, "32-Bit"
-    raise SnmpError(f"Interface-Index {idx} liefert keine Zähler")
+    raise SnmpError(T("Interface-Index {idx} liefert keine Zähler", idx=idx))
 
 
 # ====================================================================
@@ -761,8 +944,8 @@ class Poller(threading.Thread):
                         kinds.add(kind)
                     kind = "/".join(sorted(kinds))
                     shown = [counters[0][0], counters[0][1]] if len(counters) == 1 else \
-                        [f"{len(counters)} Interfaces, z. B. {counters[0][0]}",
-                         f"{len(counters)} Interfaces, z. B. {counters[0][1]}"]
+                        [T("{n} Interfaces, z. B. {x}", n=len(counters), x=counters[0][0]),
+                         T("{n} Interfaces, z. B. {x}", n=len(counters), x=counters[0][1])]
                     self.q.put((self.gen, "info", kind, shown))
                 # alle Zaehler in moeglichst wenigen Anfragen (max. 40 Werte je Paket)
                 oids = [o for c in counters for o in c[:2]]
@@ -771,7 +954,7 @@ class Poller(threading.Thread):
                     vals += [v for _, _, v in client.get(oids[i:i + 40])]
                 now = time.monotonic()
                 if any(v is None for v in vals):
-                    raise SnmpError("Zähler nicht lesbar")
+                    raise SnmpError(T("Zähler nicht lesbar"))
                 if prev is not None:
                     dt = now - prev[0]
                     din = dout = 0
@@ -844,7 +1027,7 @@ def fmt_rate(bps, unit="bit"):
         s = f"{v:.1f}"
     else:
         s = f"{v:.2f}"
-    return f"{s.replace('.', ',')} {units[i]}"
+    return f"{s.replace('.', ',') if LANG == 'de' else s} {units[i]}"
 
 
 def fmt_span(a):
@@ -969,7 +1152,7 @@ Write-Output $p
 def create_shortcut(cfg_path, where):
     """where: 'Desktop' oder 'Startup'. Gibt (ok, Pfad oder Fehlertext) zurueck."""
     if sys.platform != "win32":
-        return False, "Verknüpfungen gibt es nur unter Windows"
+        return False, T("Verknüpfungen gibt es nur unter Windows")
     import subprocess
     target, args, wd = launch_command(cfg_path)
     env = dict(os.environ, FTG_WHERE=where, FTG_LNK=shortcut_name(cfg_path), FTG_TARGET=target,
@@ -1672,14 +1855,14 @@ def save_config(path, cfg):
     """Speichert atomar. Gibt None oder eine Fehlermeldung zurueck."""
     try:
         if not ensure_dir(os.path.dirname(path)):
-            return f"Konfiguration nicht gespeichert: Ordner nicht erreichbar ({os.path.dirname(path)})"
+            return T("Konfiguration nicht gespeichert: Ordner nicht erreichbar ({d})", d=os.path.dirname(path))
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2, ensure_ascii=False)
         os.replace(tmp, path)
         return None
     except OSError as e:
-        return f"Konfiguration nicht gespeichert: {e}"
+        return T("Konfiguration nicht gespeichert: {e}", e=e)
 
 
 def real_path(path):
@@ -1731,10 +1914,10 @@ def acquire_lock(cfg_path):
 def lock_problem(cfg_path):
     d = os.path.dirname(cfg_path)
     if not os.path.isdir(d):
-        return (f"Konfigurationsordner nicht erreichbar: {d} – Rechtsklick → "
-                "Konfigurationsordner wählen")
-    return ("Diese Konfiguration ist schon in einem anderen Fenster offen – "
-            "hier wird nichts gespeichert")
+        return T("Konfigurationsordner nicht erreichbar: {d} – Rechtsklick → "
+                 "Konfigurationsordner wählen", d=d)
+    return T("Diese Konfiguration ist schon in einem anderen Fenster offen – "
+             "hier wird nichts gespeichert")
 
 
 def write_log(cfg_path, text):
@@ -1935,45 +2118,45 @@ class App:
         # Feste erste Zeile (nur im Tray-Modus aktiv). Frueher wurde sie beim ersten
         # Aufklappen eingefuegt – unter Windows vertauschte das die Untermenues
         # ("Weiteres Fenster öffnen" lud stattdessen die Konfiguration).
-        self.menu.add_command(label="Fenster ausblenden", command=self.toggle_window, state="disabled")
+        self.menu.add_command(label=T("Fenster ausblenden"), command=self.toggle_window, state="disabled")
         self.menu.add_separator()
-        self.menu.add_command(label="Einstellungen …", command=self.open_settings)
-        self.menu.add_command(label="Pause", command=self.toggle_pause, accelerator="Pause-Taste")
-        self.menu.add_command(label="Statistik zurücksetzen", command=self.clear)
+        self.menu.add_command(label=T("Einstellungen …"), command=self.open_settings)
+        self.menu.add_command(label=T("Pause"), command=self.toggle_pause, accelerator=T("Pause-Taste"))
+        self.menu.add_command(label=T("Statistik zurücksetzen"), command=self.clear)
         self.var_window = tk.IntVar(value=int(float(self.cfg["window"])))
         self.win_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                 activeforeground="white", bd=0, font=FONT,
                                 postcommand=self.fill_window_menu)
-        self.menu.add_cascade(label="Zeitraum", menu=self.win_menu)
+        self.menu.add_cascade(label=T("Zeitraum"), menu=self.win_menu)
         self.var_fill = tk.StringVar(value=self.cfg["fill"])
         fm = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                      activeforeground="white", bd=0, font=FONT)
         for val, txt in FILL_MODES:
-            fm.add_radiobutton(label=txt, value=val, variable=self.var_fill,
+            fm.add_radiobutton(label=T(txt), value=val, variable=self.var_fill,
                                command=self.set_fill_from_menu, selectcolor=FG)
-        self.menu.add_cascade(label="Füllung", menu=fm)
-        self.menu.add_checkbutton(label="Immer im Vordergrund", variable=self.var_top,
+        self.menu.add_cascade(label=T("Füllung"), menu=fm)
+        self.menu.add_checkbutton(label=T("Immer im Vordergrund"), variable=self.var_top,
                                   command=self.toggle_topmost, selectcolor=FG)
         self.var_bl = tk.BooleanVar(value=bool(self.cfg["borderless"]))
-        self.menu.add_checkbutton(label="Ohne Titelleiste", variable=self.var_bl,
+        self.menu.add_checkbutton(label=T("Ohne Titelleiste"), variable=self.var_bl,
                                   command=self.toggle_borderless, selectcolor=FG)
         self.var_tray = tk.BooleanVar(value=bool(self.cfg["tray"]))
-        self.menu.add_checkbutton(label="Nur im Infobereich (Tray)", variable=self.var_tray,
+        self.menu.add_checkbutton(label=T("Nur im Infobereich (Tray)"), variable=self.var_tray,
                                   command=self.toggle_tray, selectcolor=FG,
                                   state="normal" if tray_supported() else "disabled")
         self.win_arr_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                     activeforeground="white", bd=0, font=FONT,
                                     disabledforeground=FG_DIM, postcommand=self.fill_arrange_menu)
-        self.menu.add_cascade(label="Fenster anordnen", menu=self.win_arr_menu)
+        self.menu.add_cascade(label=T("Fenster anordnen"), menu=self.win_arr_menu)
         self.size_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                  activeforeground="white", bd=0, font=FONT,
                                  disabledforeground=FG_DIM, postcommand=self.fill_size_menu)
-        self.menu.add_cascade(label="Fenstergröße übernehmen für", menu=self.size_menu)
+        self.menu.add_cascade(label=T("Fenstergröße übernehmen für"), menu=self.size_menu)
         self.menu.add_separator()
         self.open_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                  activeforeground="white", bd=0, font=FONT,
                                  postcommand=self.fill_open_menu)
-        self.menu.add_cascade(label="Weiteres Fenster öffnen", menu=self.open_menu)
+        self.menu.add_cascade(label=T("Weiteres Fenster öffnen"), menu=self.open_menu)
         # Trennlinie: Bleibt der Zeiger auf dem Weg ins Untermenue kurz auf dem
         # Nachbarn stehen, oeffnet Windows dessen Untermenue – direkt untereinander
         # und mit gleichen Namen war das nicht zu unterscheiden.
@@ -1981,19 +2164,19 @@ class App:
         self.load_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                  activeforeground="white", bd=0, font=FONT,
                                  postcommand=self.fill_load_menu)
-        self.menu.add_command(label="Konfiguration speichern", command=lambda: self.save(show=True))
-        self.menu.add_cascade(label="Konfiguration in diesem Fenster laden", menu=self.load_menu)
+        self.menu.add_command(label=T("Konfiguration speichern"), command=lambda: self.save(show=True))
+        self.menu.add_cascade(label=T("Konfiguration in diesem Fenster laden"), menu=self.load_menu)
         self.menu.add_separator()
         self.dir_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                 activeforeground="white", bd=0, font=FONT,
                                 disabledforeground=FG_DIM, postcommand=self.fill_dir_menu)
-        self.menu.add_cascade(label="Konfigurationsordner", menu=self.dir_menu)
+        self.menu.add_cascade(label=T("Konfigurationsordner"), menu=self.dir_menu)
         self.lnk_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
                                 activeforeground="white", bd=0, font=FONT,
                                 disabledforeground=FG_DIM, postcommand=self.fill_lnk_menu)
-        self.menu.add_cascade(label="Verknüpfung", menu=self.lnk_menu)
+        self.menu.add_cascade(label=T("Verknüpfung"), menu=self.lnk_menu)
         self.menu.add_separator()
-        self.menu.add_command(label="Beenden", command=self.on_close)
+        self.menu.add_command(label=T("Beenden"), command=self.on_close)
 
         for w in (self.canvas, bar, self.lbl_in, self.lbl_out, self.lbl_state):
             w.bind("<Button-3>", self.show_menu)
@@ -2200,7 +2383,7 @@ class App:
                 self.update_tray()
             except Exception as e:
                 write_log(self.cfg_path, f"Tray nicht verfügbar: {type(e).__name__}: {e}")
-                self.error = f"Infobereich nicht verfügbar: {e}"
+                self.error = T("Infobereich nicht verfügbar: {e}", e=e)
                 self.update_labels()
         elif self.tray:
             self.tray.remove()
@@ -2229,7 +2412,7 @@ class App:
         u = self.cfg["unit"]
         tip = f"{APP} {config_name(self.cfg_path)}"
         if self.paused:
-            tip += "\nPausiert"
+            tip += "\n" + T("Pausiert")
         elif self.error:
             tip += "\n" + self.error[:80]
         else:
@@ -2333,17 +2516,17 @@ class App:
     def fill_main_menu(self):
         """Erste Zeile beschriften – nur umbenennen, nie Eintraege einfuegen/loeschen."""
         if self.tray_active():
-            label = "Fenster anzeigen" if self.window_hidden() else "Fenster ausblenden"
+            label = T("Fenster anzeigen") if self.window_hidden() else T("Fenster ausblenden")
             self.menu.entryconfigure(0, label=label, state="normal")
         else:
-            self.menu.entryconfigure(0, label="Fenster ausblenden (nur im Tray-Modus)",
+            self.menu.entryconfigure(0, label=T("Fenster ausblenden (nur im Tray-Modus)"),
                                      state="disabled")
 
     def _set_pause_label(self):
         m = self.menu
         for i in range((m.index("end") or 0) + 1):
-            if m.type(i) == "command" and m.entrycget(i, "label") in ("Pause", "Fortsetzen"):
-                m.entryconfigure(i, label="Fortsetzen" if self.paused else "Pause")
+            if m.type(i) == "command" and m.entrycget(i, "label") in (T("Pause"), T("Fortsetzen")):
+                m.entryconfigure(i, label=T("Fortsetzen") if self.paused else T("Pause"))
                 return
 
     def save_quiet(self, why):
@@ -2364,13 +2547,13 @@ class App:
             # gegenlesen: steht wirklich drin, was wir geschrieben haben?
             back = load_config(self.cfg_path)
             if any(back.get(k) != self.cfg.get(k) for k in ("host", "ifindex", "community")):
-                err = "Konfiguration geschrieben, aber beim Gegenlesen anders – bitte melden"
+                err = T("Konfiguration geschrieben, aber beim Gegenlesen anders – bitte melden")
         write_log(self.cfg_path, f"gespeichert host={self.cfg['host']!r} "
                                  f"ifindex={self.cfg['ifindex']} -> {err or 'ok'}")
         if err:
             self.error = err
         elif show:
-            self.flash = f"Gespeichert: {os.path.basename(self.cfg_path)}"
+            self.flash = T("Gespeichert: {name}", name=os.path.basename(self.cfg_path))
             self.root.after(6000, self._end_flash)
         self.update_labels()
         return err is None
@@ -2388,12 +2571,12 @@ class App:
             if name.lower() == me:
                 continue
             used = config_in_use(os.path.join(d, name + ".json"))
-            m.add_command(label=f"{name}  ➜  neues Fenster" + ("   (schon offen)" if used else ""),
+            m.add_command(label=T("{name}  ➜  neues Fenster", name=name) + (T("   (schon offen)") if used else ""),
                           state="disabled" if used else "normal",
                           command=lambda n=name: self.menu_open_window(n))
         if m.index("end") is not None:
             m.add_separator()
-        m.add_command(label="Neue Konfiguration", command=self.new_instance)
+        m.add_command(label=T("Neue Konfiguration"), command=self.new_instance)
 
     def menu_open_window(self, name):
         write_log(self.cfg_path, f"Menü: Weiteres Fenster öffnen → {name}")
@@ -2413,18 +2596,18 @@ class App:
                 continue
             path = os.path.join(d, name + ".json")
             used = config_in_use(path)
-            m.add_command(label=f"{name}  ⟲  hier laden (ersetzt dieses Fenster)"
-                                + ("   (schon offen)" if used else ""),
+            m.add_command(label=T("{name}  ⟲  hier laden (ersetzt dieses Fenster)", name=name)
+                                + (T("   (schon offen)") if used else ""),
                           state="disabled" if used else "normal",
                           command=lambda p=path: self.menu_load_config(p))
         if m.index("end") is not None:
             m.add_separator()
-        m.add_command(label="Datei wählen …", command=self.pick_config_file)
+        m.add_command(label=T("Datei wählen …"), command=self.pick_config_file)
 
     def pick_config_file(self):
         self.ensure_visible()
         p = filedialog.askopenfilename(parent=self.root, initialdir=os.path.dirname(self.cfg_path),
-                                       title="Konfiguration laden",
+                                       title=T("Konfiguration laden"),
                                        filetypes=[("FTG-Konfiguration", "*.json")])
         if p:
             self.switch_config(os.path.normpath(p))
@@ -2483,18 +2666,18 @@ class App:
         m.delete(0, "end")
         name = config_name(self.cfg_path)
         if sys.platform != "win32":
-            m.add_command(label="Nur unter Windows verfügbar", state="disabled")
+            m.add_command(label=T("Nur unter Windows verfügbar"), state="disabled")
             return
         auto = os.path.join(startup_dir(), shortcut_name(self.cfg_path))
         in_auto = os.path.exists(auto)
-        m.add_command(label=f"„{name}“ auf den Desktop", command=lambda: self.make_shortcut("Desktop"))
-        m.add_command(label=f"„{name}“ in den Autostart" + ("  (aktualisieren)" if in_auto else ""),
+        m.add_command(label=T("„{name}“ auf den Desktop", name=name), command=lambda: self.make_shortcut("Desktop"))
+        m.add_command(label=T("„{name}“ in den Autostart", name=name) + (T("  (aktualisieren)") if in_auto else ""),
                       command=lambda: self.make_shortcut("Startup"))
         if in_auto:
-            m.add_command(label=f"„{name}“ aus dem Autostart entfernen",
+            m.add_command(label=T("„{name}“ aus dem Autostart entfernen", name=name),
                           command=lambda: self.remove_autostart(auto))
         m.add_separator()
-        m.add_command(label="Autostart-Ordner öffnen", command=lambda: os.startfile(startup_dir()))
+        m.add_command(label=T("Autostart-Ordner öffnen"), command=lambda: os.startfile(startup_dir()))
 
     def make_shortcut(self, where):
         from tkinter import messagebox
@@ -2503,16 +2686,17 @@ class App:
         write_log(self.cfg_path, f"Verknüpfung {where}: {'ok ' if ok else 'FEHLER '}{info}")
         if ok:
             target, args, _ = launch_command(self.cfg_path)
-            messagebox.showinfo(APP, f"Verknüpfung erstellt:\n{info}\n\nStartet:\n{target} {args}",
+            messagebox.showinfo(APP, T("Verknüpfung erstellt:\n{info}\n\nStartet:\n{target} {args}",
+                                         info=info, target=target, args=args),
                                 parent=self.root)
         else:
-            messagebox.showerror(APP, f"Verknüpfung konnte nicht erstellt werden:\n\n{info}",
+            messagebox.showerror(APP, T("Verknüpfung konnte nicht erstellt werden:\n\n{info}", info=info),
                                  parent=self.root)
 
     def remove_autostart(self, path):
         try:
             os.remove(path)
-            self.flash = "Aus dem Autostart entfernt"
+            self.flash = T("Aus dem Autostart entfernt")
             self.root.after(4000, self._end_flash)
         except OSError as e:
             self.error = str(e)
@@ -2524,16 +2708,16 @@ class App:
         cur = os.path.dirname(self.cfg_path)
         m.add_command(label=cur, state="disabled")
         m.add_separator()
-        m.add_command(label="Im Explorer öffnen", command=self.open_config_folder)
-        m.add_command(label="Anderen Ordner wählen …", command=self.choose_config_dir)
+        m.add_command(label=T("Im Explorer öffnen"), command=self.open_config_folder)
+        m.add_command(label=T("Anderen Ordner wählen …"), command=self.choose_config_dir)
         if load_settings().get("config_dir"):
-            m.add_command(label="Zurück auf Standard (AppData)",
+            m.add_command(label=T("Zurück auf Standard (AppData)"),
                           command=lambda: self.set_config_dir(local_dir()))
 
     def choose_config_dir(self):
         self.ensure_visible()
         d = filedialog.askdirectory(parent=self.root, initialdir=os.path.dirname(self.cfg_path),
-                                    title="Konfigurationsordner wählen", mustexist=True)
+                                    title=T("Konfigurationsordner wählen"), mustexist=True)
         if d:
             self.set_config_dir(os.path.normpath(d))
 
@@ -2544,15 +2728,15 @@ class App:
         if os.path.normcase(new_dir) == os.path.normcase(old_dir):
             return
         if not os.path.isdir(new_dir):
-            messagebox.showerror(APP, f"Ordner nicht erreichbar:\n{new_dir}", parent=self.root)
+            messagebox.showerror(APP, T("Ordner nicht erreichbar:\n{d}", d=new_dir), parent=self.root)
             return
         name = config_name(self.cfg_path)
         target = os.path.join(new_dir, name + ".json")
         if os.path.exists(target):
             ans = messagebox.askyesnocancel(
-                APP, f"Im neuen Ordner gibt es schon „{name}“.\n\n"
-                     "Ja: diese Konfiguration von dort laden\n"
-                     "Nein: mit der aktuellen Konfiguration überschreiben", parent=self.root)
+                APP, T("Im neuen Ordner gibt es schon „{name}“.\n\n"
+                       "Ja: diese Konfiguration von dort laden\n"
+                       "Nein: mit der aktuellen Konfiguration überschreiben", name=name), parent=self.root)
             if ans is None:
                 return
             if ans is False:
@@ -2571,7 +2755,7 @@ class App:
                   if n.lower() != name.lower()
                   and not os.path.exists(os.path.join(new_dir, n + ".json"))]
         if others and messagebox.askyesno(
-                APP, "Sollen auch die übrigen Konfigurationen in den neuen Ordner kopiert werden?\n\n"
+                APP, T("Sollen auch die übrigen Konfigurationen in den neuen Ordner kopiert werden?\n\n")
                      + ", ".join(others), parent=self.root):
             import shutil
             for n in others:
@@ -2589,17 +2773,26 @@ class App:
             messagebox.showerror(APP, err, parent=self.root)
             return
         if self.switch_config(target):
-            self.flash = "Konfigurationsordner gewechselt"
+            self.flash = T("Konfigurationsordner gewechselt")
             self.root.after(6000, self._end_flash)
             self.update_labels()
+
+    def restart(self):
+        """Fenster neu starten (z. B. nach Wechsel der Sprache)."""
+        path = self.cfg_path
+        self.on_close()
+        if self._lock:
+            self._lock.close()
+            self._lock = None
+        launch_instance(path)
 
     def new_instance(self):
         d = os.path.dirname(self.cfg_path)
         existing = {n.lower() for n in list_configs(d)}
         k = 1
-        while f"neu{k}" in existing:
+        while f"{T('neu')}{k}" in existing:
             k += 1
-        launch_instance(f"neu{k}")
+        launch_instance(f"{T('neu')}{k}")
 
     def rename_config(self, new_path, new_lock):
         old_path, old_lock = self.cfg_path, self._lock
@@ -2790,14 +2983,14 @@ class App:
         m = self.win_menu
         m.delete(0, "end")
         if self.offset > 0 or self.paused:
-            m.add_command(label="Zurück zu „jetzt“", command=self.go_live, accelerator="Ende")
+            m.add_command(label=T("Zurück zu „jetzt“"), command=self.go_live, accelerator=T("Ende"))
             m.add_separator()
         cur = int(float(self.cfg["window"]))
         for t in sorted(set(ZOOM_STEPS) | {cur}):
             m.add_radiobutton(label=fmt_span(t), value=t, variable=self.var_window,
                               command=lambda t=t: self.set_window(t), selectcolor=FG)
         m.add_separator()
-        m.add_command(label="Mausrad = blättern, Shift+Mausrad = Zeitraum", state="disabled")
+        m.add_command(label=T("Mausrad = blättern, Shift+Mausrad = Zeitraum"), state="disabled")
 
     def set_fill_from_menu(self):
         self.cfg["fill"] = self.var_fill.get()
@@ -2840,10 +3033,10 @@ class App:
         st = "normal" if running else "disabled"
         for how, label in (("down", "↓  darunter"), ("up", "↑  darüber"),
                            ("right", "→  rechts daneben"), ("left", "←  links daneben")):
-            m.add_command(label=label, state=st, command=lambda h=how: self.arrange(h))
+            m.add_command(label=T(label), state=st, command=lambda h=how: self.arrange(h))
         m.add_separator()
-        m.add_command(label=("Dieses Fenster gibt Position und Größe vor; offen: "
-                             + ", ".join(running)) if running else "Keine weiteren Fenster offen",
+        m.add_command(label=(T("Dieses Fenster gibt Position und Größe vor; offen: ")
+                             + ", ".join(running)) if running else T("Keine weiteren Fenster offen"),
                       state="disabled")
 
     def fill_size_menu(self):
@@ -2851,13 +3044,13 @@ class App:
         m.delete(0, "end")
         others = self.other_configs()
         if not others:
-            m.add_command(label="Keine weiteren Konfigurationen", state="disabled")
+            m.add_command(label=T("Keine weiteren Konfigurationen"), state="disabled")
             return
         for name, path, run in others:
-            m.add_command(label=name + ("   (offen)" if run else ""),
+            m.add_command(label=name + (T("   (offen)") if run else ""),
                           command=lambda n=name: self.copy_size([n]))
         m.add_separator()
-        m.add_command(label="alle", command=lambda: self.copy_size([n for n, _, _ in others]))
+        m.add_command(label=T("alle"), command=lambda: self.copy_size([n for n, _, _ in others]))
 
     def outer_size(self):
         """Aussenmasse (mit Titelleiste/Rahmen) und Rahmenzuschlag des Fensters."""
@@ -2917,14 +3110,14 @@ class App:
             nx, ny = x + dx * k * ow, y + dy * k * oh
             targets[name.lower()] = {"geometry": f"{w}x{h}+{nx}+{ny}"}
         if not targets:
-            self.flash = "Keine weiteren Fenster offen"
+            self.flash = T("Keine weiteren Fenster offen")
         else:
             post_order(os.path.dirname(self.cfg_path), targets)
-            self.flash = (f"{len(targets)} Fenster angeordnet"
-                          + (" – Stapel verschoben, damit alles auf den Monitor passt" if moved_self else "")
+            self.flash = (T("{n} Fenster angeordnet", n=len(targets))
+                          + (T(" – Stapel verschoben, damit alles auf den Monitor passt") if moved_self else "")
                           if fits else
-                          f"{len(targets)} Fenster angeordnet – der Monitor ist dafür zu klein, "
-                          "sie wurden an den Rand geschoben")
+                          T("{n} Fenster angeordnet – der Monitor ist dafür zu klein, "
+                            "sie wurden an den Rand geschoben", n=len(targets)))
             write_log(self.cfg_path, f"Fenster anordnen ({how})"
                                      + (f", Stapel verschoben um {shift_x:+d}/{shift_y:+d}" if moved_self else "")
                                      + f": {targets}")
@@ -2954,7 +3147,8 @@ class App:
         if targets:
             post_order(d, targets)
         write_log(self.cfg_path, f"Größe {w}x{h} übernommen für: {', '.join(done) or '–'}")
-        self.flash = f"Größe {w} × {h} übernommen: {', '.join(done)}" if done else "Nichts geändert"
+        self.flash = (T("Größe {w} × {h} übernommen: {names}", w=w, h=h, names=", ".join(done))
+                      if done else T("Nichts geändert"))
         self.update_labels()
         self.root.after(5000, self._end_flash)
 
@@ -3160,7 +3354,7 @@ class App:
         cn = config_name(self.cfg_path)
         t = f"[{cn}] {name} @ {c['host']} – {APP}" if c["host"] else f"[{cn}] {APP}"
         if self.readonly:
-            t += " (nur Ansicht)"
+            t += T(" (nur Ansicht)")
         self.root.title(t)
 
     def update_labels(self):
@@ -3179,11 +3373,11 @@ class App:
         elif self.flash:
             self.lbl_state.config(text=self.flash, fg=OK_COLOR, wraplength=wrap)
         elif self.paused:
-            self.lbl_state.config(text="Pausiert", fg=FG_DIM)
+            self.lbl_state.config(text=T("Pausiert"), fg=FG_DIM)
         else:
-            parts = [f"alle {self.cfg['interval']:g} s · {fmt_span(float(self.cfg['window']))}"]
+            parts = [T("alle {i} s", i=f"{self.cfg['interval']:g}") + f" · {fmt_span(float(self.cfg['window']))}"]
             if self.info:
-                parts.append(f"{self.info}-Zähler · {snmp_label(self.cfg)}")
+                parts.append(T("{kind}-Zähler", kind=self.info) + f" · {snmp_label(self.cfg)}")
             self.lbl_state.config(text="\n".join(parts), fg=FG_DIM)
 
     def scale_top(self, pts=None):
@@ -3219,7 +3413,7 @@ class App:
         # senkrechte Zeitlinien (Alter relativ zu "jetzt", auch beim Blaettern)
         tick = next((t for t in (5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200)
                      if window / t <= 6 and t / window * gw >= 60), 14400)
-        right = c.create_text(x_r, y_b + 4, text="jetzt" if off == 0 else fmt_age(off),
+        right = c.create_text(x_r, y_b + 4, text=T("jetzt") if off == 0 else fmt_age(off),
                               fill=FG_DIM if off == 0 else FG, font=FONT_SMALL, anchor="ne")
         free_until = c.bbox(right)[0] - 8          # Beschriftungen nicht ueberlappen
         a = (math.floor(off / tick + 1e-9) + 1) * tick
@@ -3297,7 +3491,7 @@ class App:
                 c.create_line([v for q in seg for v in (q[0], Y(q[k]))], fill=col, width=1.5)
 
         if off > 0:
-            c.create_text(x_r - 6, mt + 6, text=f"◀ zurückgeblättert {fmt_span(off)}  ·  Ende = jetzt",
+            c.create_text(x_r - 6, mt + 6, text=T("◀ zurückgeblättert {span}  ·  Ende = jetzt", span=fmt_span(off)),
                           fill=FG, font=FONT_SMALL, anchor="ne")
 
         if self.cfg.get("show_label", True):
@@ -3315,7 +3509,7 @@ class App:
         if self.paused and off == 0:
             c.create_text(ml + gw / 2, mt + gh / 2, text="PAUSE", fill=FG_DIM, font=("Segoe UI", 16, "bold"))
         elif not pts and not self.error and self.cfg["host"]:
-            c.create_text(ml + gw / 2, mt + gh / 2, text="warte auf Daten …", fill=FG_DIM, font=FONT)
+            c.create_text(ml + gw / 2, mt + gh / 2, text=T("warte auf Daten …"), fill=FG_DIM, font=FONT)
         self.draw_size_hint()
 
     # ---------------------------------------------------------- Einstellungen
@@ -3361,7 +3555,7 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(app.root)
         self.app = app
         cfg = app.cfg
-        self.title("Einstellungen")
+        self.title(T("Einstellungen"))
         self.configure(bg=PANEL, padx=14, pady=12)
         self.resizable(False, False)
         self.transient(app.root)
@@ -3369,7 +3563,7 @@ class SettingsDialog(tk.Toplevel):
         self.fetch_q = queue.Queue()
 
         def label(text, row):
-            tk.Label(self, text=text, bg=PANEL, fg=FG, font=FONT, anchor="w").grid(
+            tk.Label(self, text=T(text), bg=PANEL, fg=FG, font=FONT, anchor="w").grid(
                 row=row, column=0, sticky="w", pady=3, padx=(0, 10))
 
         def entry(value, row, width=28):
@@ -3401,7 +3595,7 @@ class SettingsDialog(tk.Toplevel):
         self.cb = ttk.Combobox(icell, state="readonly", width=34, font=FONT)
         self.cb.grid(row=0, column=0, sticky="we")
         self.v_sum = tk.BooleanVar(value=bool(cfg.get("if_sum")))
-        tk.Checkbutton(icell, text="Summe mehrerer Interfaces", variable=self.v_sum,
+        tk.Checkbutton(icell, text=T("Summe mehrerer Interfaces"), variable=self.v_sum,
                        command=self._sum_mode, bg=PANEL, fg=FG, selectcolor=FIELD,
                        activebackground=PANEL, activeforeground=FG, font=FONT,
                        highlightthickness=0).grid(row=1, column=0, sticky="w")
@@ -3464,7 +3658,7 @@ class SettingsDialog(tk.Toplevel):
         label("Zeitraum (s)", 8)
         self.e_win = entry(cfg["window"], 8)
         self.e_win.grid_configure(columnspan=1)
-        tk.Label(self, text="auch per Shift+Mausrad oder Kippen", bg=PANEL, fg=FG_DIM,
+        tk.Label(self, text=T("auch per Shift+Mausrad oder Kippen"), bg=PANEL, fg=FG_DIM,
                  font=FONT_SMALL).grid(row=8, column=2, sticky="w", padx=(6, 0))
 
         label("Einheit", 9)
@@ -3483,7 +3677,7 @@ class SettingsDialog(tk.Toplevel):
         cf.grid(row=10, column=1, columnspan=2, sticky="w", pady=3)
         self.swatches = {}
         for key, txt in (("color_in", "In"), ("color_out", "Out"), ("color_label", "Name")):
-            tk.Label(cf, text=txt, bg=PANEL, fg=FG, font=FONT).pack(side="left", padx=(0, 6))
+            tk.Label(cf, text=T(txt), bg=PANEL, fg=FG, font=FONT).pack(side="left", padx=(0, 6))
             b = tk.Button(cf, width=4, relief="flat", bd=0, cursor="hand2",
                           bg=self.colors[key], activebackground=self.colors[key],
                           highlightthickness=1, highlightbackground=GRID_STRONG,
@@ -3494,12 +3688,12 @@ class SettingsDialog(tk.Toplevel):
 
         label("Name im Graph", 11)
         self.v_label = tk.BooleanVar(value=bool(cfg.get("show_label", True)))
-        tk.Checkbutton(self, text="oben links anzeigen", variable=self.v_label, bg=PANEL, fg=FG,
+        tk.Checkbutton(self, text=T("oben links anzeigen"), variable=self.v_label, bg=PANEL, fg=FG,
                        selectcolor=FIELD, activebackground=PANEL, activeforeground=FG,
                        font=FONT, highlightthickness=0).grid(row=11, column=1, sticky="w")
 
         def check(var, text, parent=None):
-            return tk.Checkbutton(parent or self, text=text, variable=var, bg=PANEL, fg=FG,
+            return tk.Checkbutton(parent or self, text=T(text), variable=var, bg=PANEL, fg=FG,
                                   selectcolor=FIELD, activebackground=PANEL, activeforeground=FG,
                                   disabledforeground=FG_DIM, font=FONT, highlightthickness=0)
 
@@ -3508,7 +3702,7 @@ class SettingsDialog(tk.Toplevel):
         ff = tk.Frame(self, bg=PANEL)
         ff.grid(row=12, column=1, columnspan=2, sticky="w")
         for val, txt in (("in", "In"), ("out", "Out"), ("both", "beide"), ("none", "keine")):
-            tk.Radiobutton(ff, text=txt, value=val, variable=self.v_fill, bg=PANEL, fg=FG,
+            tk.Radiobutton(ff, text=T(txt), value=val, variable=self.v_fill, bg=PANEL, fg=FG,
                            selectcolor=FIELD, activebackground=PANEL, activeforeground=FG,
                            font=FONT, highlightthickness=0).pack(side="left", padx=(0, 12))
 
@@ -3523,7 +3717,7 @@ class SettingsDialog(tk.Toplevel):
                           activebackground=ACCENT, sliderrelief="flat")
             sc.pack(side="left")
             lbl.pack(side="left", padx=(4, 12))
-            tk.Label(fr, text=hint, bg=PANEL, fg=FG_DIM, font=FONT_SMALL).pack(side="left")
+            tk.Label(fr, text=T(hint), bg=PANEL, fg=FG_DIM, font=FONT_SMALL).pack(side="left")
             return fr, sc, lbl
 
         label("Hintergrund", 13)
@@ -3540,14 +3734,21 @@ class SettingsDialog(tk.Toplevel):
         self.lbl_alpha.config(text=f"{self.v_alpha.get()} %")
         self.lbl_bga.config(text=f"{self.v_bga.get()} %")
 
+        label("Sprache", 16)
+        self.lang_pref = load_settings().get("language", "auto")
+        self.cb_lang = ttk.Combobox(self, state="readonly", width=30, font=FONT,
+                                    values=[T(t) for _, t in LANG_CHOICES])
+        self.cb_lang.set(T(dict(LANG_CHOICES).get(self.lang_pref, LANG_CHOICES[0][1])))
+        self.cb_lang.grid(row=16, column=1, sticky="w", pady=(6, 3))
+
         self.msg = tk.Label(self, text="", bg=PANEL, fg=ERR, font=FONT, anchor="w",
                             wraplength=420, justify="left")
-        self.msg.grid(row=16, column=0, columnspan=3, sticky="we", pady=(6, 0))
+        self.msg.grid(row=17, column=0, columnspan=3, sticky="we", pady=(6, 0))
 
         tk.Label(self, text=f"{APP_LONG}  ·  Version {VERSION}", bg=PANEL, fg=FG_DIM,
-                 font=FONT_SMALL).grid(row=17, column=0, columnspan=2, sticky="sw", pady=(10, 0))
+                 font=FONT_SMALL).grid(row=18, column=0, columnspan=2, sticky="sw", pady=(10, 0))
         btns = tk.Frame(self, bg=PANEL)
-        btns.grid(row=17, column=1, columnspan=2, sticky="e", pady=(10, 0))
+        btns.grid(row=18, column=1, columnspan=2, sticky="e", pady=(10, 0))
         self.update_oids()
         if self._pw_err:
             self.msg.config(text=self._pw_err, fg=ERR)
@@ -3593,12 +3794,12 @@ class SettingsDialog(tk.Toplevel):
         rb = tk.Frame(fr, bg=PANEL)
         rb.grid(row=0, column=0, columnspan=3, sticky="w")
         for val, txt in (("2c", "Version 2c (Community)"), ("3", "Version 3 (Benutzer, verschlüsselt)")):
-            tk.Radiobutton(rb, text=txt, value=val, variable=self.v_ver, command=self._snmp_mode,
+            tk.Radiobutton(rb, text=T(txt), value=val, variable=self.v_ver, command=self._snmp_mode,
                            bg=PANEL, fg=FG, selectcolor=FIELD, activebackground=PANEL,
                            activeforeground=FG, font=FONT, highlightthickness=0).pack(side="left", padx=(0, 12))
 
         def lab(parent, text, r):
-            tk.Label(parent, text=text, bg=PANEL, fg=FG_DIM, font=FONT, anchor="w").grid(
+            tk.Label(parent, text=T(text), bg=PANEL, fg=FG_DIM, font=FONT, anchor="w").grid(
                 row=r, column=0, sticky="w", padx=(0, 8), pady=2)
 
         self.f_v2 = tk.Frame(fr, bg=PANEL)
@@ -3620,20 +3821,20 @@ class SettingsDialog(tk.Toplevel):
         self.e_v3user.grid(row=0, column=1, columnspan=2, sticky="we", pady=2)
         lab(self.f_v3, "Anmeldung", 1)
         self.cb_auth = ttk.Combobox(self.f_v3, state="readonly", width=9, font=FONT,
-                                    values=V3_AUTH_CHOICES)
-        self.cb_auth.set(cfg.get("v3_auth") if cfg.get("v3_auth") in V3_AUTH_CHOICES else "SHA-256")
+                                    values=[T(x) for x in V3_AUTH_CHOICES])
+        self.cb_auth.set(T(cfg.get("v3_auth") if cfg.get("v3_auth") in V3_AUTH_CHOICES else "SHA-256"))
         self.cb_auth.grid(row=1, column=1, sticky="w", pady=2)
         self.e_authpw = ent(self.f_v3, apw, 20, show="•")
         self.e_authpw.grid(row=1, column=2, sticky="we", padx=(6, 0), pady=2)
         lab(self.f_v3, "Verschlüsselung", 2)
         self.cb_priv = ttk.Combobox(self.f_v3, state="readonly", width=9, font=FONT,
-                                    values=V3_PRIV_CHOICES)
-        self.cb_priv.set(cfg.get("v3_priv") if cfg.get("v3_priv") in V3_PRIV_CHOICES else "AES-128")
+                                    values=[T(x) for x in V3_PRIV_CHOICES])
+        self.cb_priv.set(T(cfg.get("v3_priv") if cfg.get("v3_priv") in V3_PRIV_CHOICES else "AES-128"))
         self.cb_priv.grid(row=2, column=1, sticky="w", pady=2)
         self.e_privpw = ent(self.f_v3, ppw, 20, show="•")
         self.e_privpw.grid(row=2, column=2, sticky="we", padx=(6, 0), pady=2)
         self.v_showpw = tk.BooleanVar(value=False)
-        tk.Checkbutton(self.f_v3, text="Passwörter anzeigen", variable=self.v_showpw,
+        tk.Checkbutton(self.f_v3, text=T("Passwörter anzeigen"), variable=self.v_showpw,
                        command=lambda: [e.config(show="" if self.v_showpw.get() else "•")
                                         for e in (self.e_authpw, self.e_privpw)],
                        bg=PANEL, fg=FG_DIM, selectcolor=FIELD, activebackground=PANEL,
@@ -3648,27 +3849,33 @@ class SettingsDialog(tk.Toplevel):
         v3 = self.v_ver.get() == "3"
         (self.f_v3 if v3 else self.f_v2).grid(row=1, column=0, columnspan=3, sticky="we", pady=(2, 0))
         (self.f_v2 if v3 else self.f_v3).grid_remove()
-        auth = self.cb_auth.get() != "keine"
+        auth = self._cbv(self.cb_auth) != "keine"
         if not auth:
-            self.cb_priv.set("keine")
+            self.cb_priv.set(T("keine"))
         self.e_authpw.config(state="normal" if auth else "disabled")
         self.cb_priv.config(state="readonly" if auth else "disabled")
-        self.e_privpw.config(state="normal" if auth and self.cb_priv.get() != "keine" else "disabled")
+        self.e_privpw.config(state="normal" if auth and self._cbv(self.cb_priv) != "keine" else "disabled")
+
+    @staticmethod
+    def _cbv(cb):
+        """Wert einer Auswahlliste – angezeigt wird ggf. die Uebersetzung von „keine“."""
+        v = cb.get()
+        return "keine" if v == T("keine") else v
 
     def snmp_values(self):
         """(Konfigurationswerte, Klartext-Passwoerter) oder Fehlertext."""
         if self.v_ver.get() != "3":
             return {"snmp_version": "2c", "community": self.e_comm.get()}, ("", "")
         user = self.e_v3user.get().strip()
-        auth, priv = self.cb_auth.get(), self.cb_priv.get()
+        auth, priv = self._cbv(self.cb_auth), self._cbv(self.cb_priv)
         apw = self.e_authpw.get() if auth != "keine" else ""
         ppw = self.e_privpw.get() if auth != "keine" and priv != "keine" else ""
         if not user:
-            return "SNMPv3: Benutzername fehlt."
+            return T("SNMPv3: Benutzername fehlt.")
         if auth != "keine" and len(apw) < 8:
-            return "SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben."
+            return T("SNMPv3: Auth-Passwort muss mindestens 8 Zeichen haben.")
         if priv != "keine" and auth != "keine" and len(ppw) < 8:
-            return "SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben."
+            return T("SNMPv3: Priv-Passwort muss mindestens 8 Zeichen haben.")
         return ({"snmp_version": "3", "community": self.e_comm.get(), "v3_user": user,
                  "v3_auth": auth, "v3_priv": priv if auth != "keine" else "keine"}, (apw, ppw))
 
@@ -3685,7 +3892,7 @@ class SettingsDialog(tk.Toplevel):
 
     def _sum_count(self):
         n = len(self.lb_sum.curselection())
-        self.lbl_sum.config(text=f"{n} gewählt")
+        self.lbl_sum.config(text=T("{n} gewählt", n=n))
 
     def sum_selection(self):
         """[(index, name)] der angekreuzten Interfaces."""
@@ -3709,7 +3916,7 @@ class SettingsDialog(tk.Toplevel):
             self.f_sum.grid(row=5, column=0, rowspan=2, columnspan=3, sticky="nsew", pady=(2, 4))
             self.cb.config(state="disabled")
             if not self._sum_items:
-                self.msg.config(text="Zum Auswählen erst „Abfragen“ klicken.", fg=FG_DIM)
+                self.msg.config(text=T("Zum Auswählen erst „Abfragen“ klicken."), fg=FG_DIM)
         else:
             self.f_sum.grid_remove()
             for w in self._oid_widgets:
@@ -3730,7 +3937,7 @@ class SettingsDialog(tk.Toplevel):
         self.destroy()
 
     def _button(self, text, cmd, parent=None):
-        return tk.Button(parent or self, text=text, command=cmd, bg=FIELD, fg=FG, relief="flat",
+        return tk.Button(parent or self, text=T(text), command=cmd, bg=FIELD, fg=FG, relief="flat",
                          activebackground=ACCENT, activeforeground="white", font=FONT,
                          padx=12, pady=3, bd=0, cursor="hand2")
 
@@ -3756,8 +3963,8 @@ class SettingsDialog(tk.Toplevel):
     def pick_color(self, key):
         from tkinter import colorchooser
         _, hx = colorchooser.askcolor(color=self.colors[key], parent=self,
-                                      title="Farbe für " + {"color_in": "In", "color_out": "Out",
-                                                           "color_label": "Name"}[key])
+                                      title=T("Farbe für {x}", x=T({"color_in": "In", "color_out": "Out",
+                                                                     "color_label": "Name"}[key])))
         if hx:
             self.set_color(key, hx)
 
@@ -3774,18 +3981,18 @@ class SettingsDialog(tk.Toplevel):
             return
         self.clipboard_clear()
         self.clipboard_append(text)
-        self.msg.config(text=f"Kopiert: {text}", fg=FG_DIM)
+        self.msg.config(text=T("Kopiert: {x}", x=text), fg=FG_DIM)
 
     def fetch(self, auto=False):
         host = self.e_host.get().strip()
         if not host:
             if not auto:
-                self.msg.config(text="Bitte zuerst Host angeben.")
+                self.msg.config(text=T("Bitte zuerst Host angeben."))
             return
         try:
             port = int(self.e_port.get())
         except ValueError:
-            self.msg.config(text="Port ist keine Zahl.")
+            self.msg.config(text=T("Port ist keine Zahl."))
             return
         sv = self.snmp_values()
         if isinstance(sv, str):
@@ -3795,7 +4002,7 @@ class SettingsDialog(tk.Toplevel):
         vals, secrets = sv
         ccfg = dict(vals, host=host, port=port)
         self.btn_fetch.config(state="disabled", text="…")
-        self.msg.config(text="Frage Interfaces ab …", fg=FG_DIM)
+        self.msg.config(text=T("Frage Interfaces ab …"), fg=FG_DIM)
 
         def worker():
             client = None
@@ -3819,7 +4026,7 @@ class SettingsDialog(tk.Toplevel):
         except queue.Empty:
             self.after(100, self._check_fetch)
             return
-        self.btn_fetch.config(state="normal", text="Abfragen")
+        self.btn_fetch.config(state="normal", text=T("Abfragen"))
         if kind == "err":
             self.msg.config(text=payload, fg=ERR)
             return
@@ -3839,7 +4046,7 @@ class SettingsDialog(tk.Toplevel):
             [int(i) for i in (self.app.cfg.get("ifindexes") or [])]
         self._sum_items = values
         self._fill_sum_list(keep)
-        self.msg.config(text=f"{len(values)} Interfaces gefunden.", fg=FG_DIM)
+        self.msg.config(text=T("{n} Interfaces gefunden.", n=len(values)), fg=FG_DIM)
 
     def ok(self):
         try:
@@ -3847,18 +4054,18 @@ class SettingsDialog(tk.Toplevel):
             interval = float(self.e_int.get().replace(",", "."))
             window = int(float(self.e_win.get().replace(",", ".")))
         except ValueError:
-            self.msg.config(text="Port, Intervall und Zeitraum müssen Zahlen sein.", fg=ERR)
+            self.msg.config(text=T("Port, Intervall und Zeitraum müssen Zahlen sein."), fg=ERR)
             return
         host = self.e_host.get().strip()
         sel = self.cb.get()
         summe = self.sum_selection() if self.v_sum.get() else []
         if self.v_sum.get() and not summe:
-            self.msg.config(text="Für die Summe mindestens ein Interface ankreuzen.", fg=ERR)
+            self.msg.config(text=T("Für die Summe mindestens ein Interface ankreuzen."), fg=ERR)
             return
         if summe and not sel:
             sel = f"{summe[0][0]}: {summe[0][1]}"
         if not host or not sel:
-            self.msg.config(text="Host und Interface müssen gesetzt sein.", fg=ERR)
+            self.msg.config(text=T("Host und Interface müssen gesetzt sein."), fg=ERR)
             return
         sv = self.snmp_values()
         if isinstance(sv, str):
@@ -3869,22 +4076,22 @@ class SettingsDialog(tk.Toplevel):
             snmp_cfg["v3_auth_pw"] = protect_secret(apw)
             snmp_cfg["v3_priv_pw"] = protect_secret(ppw)
         if interval < 0.2 or window < 10 or window / interval > 20000:
-            self.msg.config(text="Intervall ≥ 0,2 s, Zeitraum ≥ 10 s, höchstens 20000 Messpunkte.", fg=ERR)
+            self.msg.config(text=T("Intervall ≥ 0,2 s, Zeitraum ≥ 10 s, höchstens 20000 Messpunkte."), fg=ERR)
             return
         name = self.e_name.get().strip()
         cur_name = config_name(self.app.cfg_path)
         if not self.app.readonly and name.lower() != cur_name.lower():
             if not valid_name(name):
-                self.msg.config(text="Name: 1–40 Zeichen, nur Buchstaben, Ziffern, "
-                                     "Leerzeichen, - und _.", fg=ERR)
+                self.msg.config(text=T("Name: 1–40 Zeichen, nur Buchstaben, Ziffern, "
+                                       "Leerzeichen, - und _."), fg=ERR)
                 return
             new_path = os.path.join(os.path.dirname(self.app.cfg_path), name + ".json")
             if os.path.exists(new_path):
-                self.msg.config(text=f"Eine Konfiguration „{name}“ gibt es schon.", fg=ERR)
+                self.msg.config(text=T("Eine Konfiguration „{name}“ gibt es schon.", name=name), fg=ERR)
                 return
             lock = acquire_lock(new_path)
             if lock is None:
-                self.msg.config(text=f"„{name}“ ist gerade in einem anderen Fenster offen.", fg=ERR)
+                self.msg.config(text=T("„{name}“ ist gerade in einem anderen Fenster offen.", name=name), fg=ERR)
                 return
             err = self.app.rename_config(new_path, lock)
             if err:
@@ -3894,7 +4101,7 @@ class SettingsDialog(tk.Toplevel):
         name = next((n for i, n, _ in self.ifaces if i == idx),
                     sel.split(":", 1)[1].split("  (")[0].strip())
         if summe:
-            idx, name = summe[0][0], f"Summe {len(summe)} Interfaces"
+            idx, name = summe[0][0], T("Summe {n} Interfaces", n=len(summe))
         self.app.apply_settings({
             **snmp_cfg,
             "if_sum": bool(summe), "ifindexes": [i for i, _ in summe] if summe else
@@ -3910,7 +4117,14 @@ class SettingsDialog(tk.Toplevel):
         })
         self.app._alpha_preview = False
         self.app.apply_look()
+        lang = next((k for k, t in LANG_CHOICES if T(t) == self.cb_lang.get()), "auto")
         self.destroy()
+        if lang != self.lang_pref:
+            st = load_settings()
+            st["language"] = lang
+            if not save_settings(st):
+                write_log(self.app.cfg_path, f"Sprache: {lang} – Fenster startet neu")
+                self.app.restart()
 
 
 # ====================================================================
@@ -3942,6 +4156,7 @@ def main():
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FTG.TrafficGrapher")
         except Exception:
             pass
+    init_lang()
     cfg_path = resolve_config_path(sys.argv[1] if len(sys.argv) > 1 else "")
     root = tk.Tk()
     apply_app_icon(root)
@@ -3953,7 +4168,7 @@ def main():
         from tkinter import messagebox
         text = "".join(traceback.format_exception(exc, val, tb))
         write_log(cfg_path, "FEHLER\n" + text)
-        messagebox.showerror(APP, f"Interner Fehler:\n\n{val}\n\nDetails stehen in {LOGNAME}")
+        messagebox.showerror(APP, T("Interner Fehler:\n\n{val}\n\nDetails stehen in {log}", val=val, log=LOGNAME))
 
     root.report_callback_exception = on_error
     app = App(root, cfg_path)

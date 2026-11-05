@@ -18,7 +18,8 @@ scroll back. Each window watches one interface (or the sum of several), and you 
 many windows side by side as you like.
 
 FTG is **one single Python file** using only the standard library – no packages to install.
-The user interface is in German.
+The user interface is available in English and German – chosen automatically from the
+Windows language, switchable in the settings.
 
 ### Features
 - **SNMP v2c and v3** (USM: MD5, SHA, SHA-224/256/384/512; AES-128), 64-bit counters with
@@ -110,7 +111,8 @@ oder zurückblättern kann. Jedes Fenster beobachtet ein Interface (oder die Sum
 beliebig viele Fenster können nebeneinander laufen.
 
 FTG ist **eine einzige Python-Datei** und braucht nur die Standardbibliothek – keine Pakete
-installieren. Die Oberfläche ist deutsch.
+installieren. Die Oberfläche gibt es auf Deutsch und Englisch – automatisch nach der
+Windows-Sprache, umschaltbar in den Einstellungen.
 
 ### Funktionen
 - **SNMP v2c und v3** (USM: MD5, SHA, SHA-224/256/384/512; AES-128), 64-Bit-Zähler mit

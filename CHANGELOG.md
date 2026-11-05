@@ -4,6 +4,14 @@ Version number in `ftg.pyw` (`VERSION`), shown in the settings dialog, briefly a
 in `ftg.log`. / Die Versionsnummer steht in `ftg.pyw` (`VERSION`), im Einstellungsfenster,
 kurz beim Start und im `ftg.log`.
 
+## 1.10.0 – 2026-11-04 – English user interface / englische Oberfläche
+- EN: The user interface is now available in English and German. The language follows Windows
+  (German → German, any other language → English) and can be set in the settings
+  (Automatic / Deutsch / English). Numbers use a decimal point in English.
+- DE: Die Oberfläche gibt es jetzt auf Englisch und Deutsch. Die Sprache richtet sich nach Windows
+  (Deutsch → deutsch, jede andere Sprache → englisch) und lässt sich in den Einstellungen festlegen
+  (Automatisch / Deutsch / English).
+
 ## 1.9.0 – 2026-11-04 – first public release / erste öffentliche Version
 - EN: Label for sums of interfaces is now `Name · [7]`. The settings dialog loads the interface
   list automatically for existing configurations. Header comment updated, legacy migration removed.
