@@ -38,7 +38,9 @@ import math
 import os
 import queue
 import random
+import re
 import socket
+import struct
 import sys
 import threading
 import time
@@ -47,7 +49,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 
 APP = "FTG"
-VERSION = "1.11.0"         # Aenderungen: CHANGELOG.md
+VERSION = "1.12.2"         # Aenderungen: CHANGELOG.md
 APP_LONG = "FTG – Flexible Traffic Grapher"
 LOGNAME = "ftg.log"
 
@@ -164,6 +166,24 @@ EN = {
     "Fenster anordnen": "Arrange windows", "Fenstergröße übernehmen für": "Copy window size to",
     "Weiteres Fenster öffnen": "Open another window",
     "Sicherungskopie speichern": "Save backup copy",
+    "Screenshot in die Zwischenablage": "Screenshot to clipboard", "Strg+C": "Ctrl+C",
+    "Screenshot von „{name}“ in der Zwischenablage ({w} × {h})":
+        "Screenshot of “{name}” copied to the clipboard ({w} × {h})",
+    "Screenshot von „{name}“ kopiert": "Screenshot of “{name}” copied",
+    "Mit Strg+V z. B. in eine E-Mail oder ein Dokument einfügen.":
+        "Paste it with Ctrl+V, e.g. into an e-mail or a document.",
+    "Screenshot fehlgeschlagen: {e}": "Screenshot failed: {e}",
+    "Farben von In und Out tauschen": "Swap the colours of In and Out",
+    "Verknüpfungen prüfen": "Check shortcuts",
+    "Alle FTG-Verknüpfungen in Autostart und auf dem Desktop sind aktuell.":
+        "All FTG shortcuts in autostart and on the desktop are up to date.",
+    "Diese Verknüpfungen zeigen noch auf einen anderen Ordner:\n\n{items}\n\n"
+    "Auf den Konfigurationsordner\n{d}\numstellen?":
+        "These shortcuts still point to another folder:\n\n{items}\n\n"
+        "Switch them to the configuration folder\n{d}?",
+    "Autostart": "Autostart", "Desktop": "Desktop",
+    "{n} Verknüpfung(en) umgestellt": "{n} shortcut(s) updated",
+    "Verknüpfungen konnten nicht geprüft werden: {e}": "Could not check shortcuts: {e}",
     "Sicherungskopie wiederherstellen": "Restore backup copy",
     "Sicherungskopie gespeichert: {name}": "Backup copy saved: {name}",
     "Sicherungskopie nicht gespeichert: {e}": "Backup copy not saved: {e}",
@@ -1184,6 +1204,152 @@ def create_shortcut(cfg_path, where):
     return True, r.stdout.strip()
 
 
+_PS_LIST_LNK = r"""
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$ws  = New-Object -ComObject WScript.Shell
+$out = @()
+foreach ($w in @('Startup', 'Desktop')) {
+  $d = [Environment]::GetFolderPath($w)
+  if (-not $d) { continue }
+  Get-ChildItem -LiteralPath $d -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object {
+    $l = $ws.CreateShortcut($_.FullName)
+    $out += [pscustomobject]@{ p = $_.FullName; w = $w; t = $l.TargetPath; a = $l.Arguments }
+  }
+}
+ConvertTo-Json -InputObject @($out) -Compress
+"""
+
+_PS_SET_ARGS = r"""
+$ws = New-Object -ComObject WScript.Shell
+foreach ($j in (ConvertFrom-Json $env:FTG_JOBS)) {
+  $l = $ws.CreateShortcut($j.p)
+  $l.Arguments = $j.a
+  $l.Save()
+}
+"""
+
+
+def run_ps(script, env=None):
+    """PowerShell-Skript ausfuehren, Rueckgabe: stdout. Fehler -> OSError."""
+    import subprocess
+    try:
+        r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy",
+                            "Bypass", "-Command", script], env=dict(os.environ, **(env or {})),
+                           capture_output=True, timeout=30, creationflags=0x08000000)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise OSError(str(e)) from e
+    out = r.stdout.decode("utf-8", "replace")
+    if r.returncode != 0:
+        raise OSError((r.stderr.decode("utf-8", "replace") or out).strip()[:300]
+                      or f"PowerShell-Fehler {r.returncode}")
+    return out
+
+
+def _dir_key(d):
+    return os.path.normcase(to_unc(d)).rstrip("\\/")
+
+
+def stale_shortcuts(cfg_dir, old_dir=None):
+    """FTG-Verknuepfungen (Autostart, Desktop), deren Konfiguration nicht im Ordner cfg_dir liegt,
+    obwohl es dort eine gleichnamige gibt. Mit old_dir nur solche, die auf old_dir zeigen.
+    Rueckgabe: [(lnk, wo, alte Argumente, neue Argumente, Name)]"""
+    if sys.platform != "win32":
+        return []
+    items = json.loads(run_ps(_PS_LIST_LNK).strip() or "[]")
+    if isinstance(items, dict):
+        items = [items]
+    want, old = _dir_key(cfg_dir), (_dir_key(old_dir) if old_dir else None)
+    found = []
+    for it in items:
+        args = it.get("a") or ""
+        m = re.findall(r'"([^"]+\.json)"', args, re.I) or re.findall(r'(\S+\.json)', args, re.I)
+        if not m:
+            continue
+        jp = m[-1]
+        name = os.path.splitext(os.path.basename(jp))[0]
+        d = _dir_key(os.path.dirname(jp))
+        if d == want or (old is not None and d != old):
+            continue
+        new_json = os.path.join(cfg_dir, name + ".json")
+        if not os.path.exists(new_json):
+            continue
+        found.append((it.get("p"), it.get("w"), args, args.replace(jp, to_unc(new_json)), name))
+    return found
+
+
+def update_shortcuts(jobs):
+    run_ps(_PS_SET_ARGS, {"FTG_JOBS": json.dumps([{"p": p, "a": a} for p, a in jobs])})
+
+
+# ---------------------------------------------------------------- Screenshot
+def copy_window_image(hwnd):
+    """Fenster so, wie es auf dem Bildschirm zu sehen ist, als Bild (CF_DIB) in die
+    Zwischenablage legen. Rueckgabe (Breite, Hoehe). Nur Windows."""
+    import ctypes.wintypes as wt
+    VP, I = ctypes.c_void_p, ctypes.c_int
+    u, g, k = (ctypes.WinDLL(n, use_last_error=True) for n in ("user32", "gdi32", "kernel32"))
+    dwm = ctypes.WinDLL("dwmapi")
+    for f, res, args in ((u.GetDC, VP, [VP]), (u.ReleaseDC, I, [VP, VP]),
+                         (u.GetWindowRect, wt.BOOL, [VP, VP]),
+                         (u.OpenClipboard, wt.BOOL, [VP]), (u.EmptyClipboard, wt.BOOL, []),
+                         (u.SetClipboardData, VP, [wt.UINT, VP]), (u.CloseClipboard, wt.BOOL, []),
+                         (g.CreateCompatibleDC, VP, [VP]), (g.CreateCompatibleBitmap, VP, [VP, I, I]),
+                         (g.SelectObject, VP, [VP, VP]),
+                         (g.BitBlt, wt.BOOL, [VP, I, I, I, I, VP, I, I, wt.DWORD]),
+                         (g.GetDIBits, I, [VP, VP, wt.UINT, wt.UINT, VP, VP, wt.UINT]),
+                         (g.DeleteObject, wt.BOOL, [VP]), (g.DeleteDC, wt.BOOL, [VP]),
+                         (k.GlobalAlloc, VP, [wt.UINT, ctypes.c_size_t]), (k.GlobalLock, VP, [VP]),
+                         (k.GlobalUnlock, wt.BOOL, [VP]), (k.GlobalFree, VP, [VP]),
+                         (dwm.DwmGetWindowAttribute, ctypes.c_long, [VP, wt.DWORD, VP, wt.DWORD])):
+        f.restype, f.argtypes = res, args
+    r = wt.RECT()
+    if dwm.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(r), ctypes.sizeof(r)) != 0:   # Rahmen ohne Schatten
+        u.GetWindowRect(hwnd, ctypes.byref(r))
+    w, h = r.right - r.left, r.bottom - r.top
+    if w <= 0 or h <= 0:
+        raise OSError("Fenster hat keine Größe")
+    sdc = u.GetDC(None)
+    mdc = g.CreateCompatibleDC(sdc)
+    bmp = g.CreateCompatibleBitmap(sdc, w, h)
+    try:
+        old = g.SelectObject(mdc, bmp)
+        if not g.BitBlt(mdc, 0, 0, w, h, sdc, r.left, r.top, 0x00CC0020 | 0x40000000):  # SRCCOPY|CAPTUREBLT
+            raise OSError("BitBlt fehlgeschlagen")
+        g.SelectObject(mdc, old)
+        stride = (w * 3 + 3) & ~3
+        hdr = struct.pack("<IiiHHIIiiII", 40, w, h, 1, 24, 0, stride * h, 0, 0, 0, 0)  # von unten nach oben
+        bi = ctypes.create_string_buffer(hdr, 44)
+        bits = ctypes.create_string_buffer(stride * h)
+        if g.GetDIBits(mdc, bmp, 0, h, bits, bi, 0) != h:
+            raise OSError("GetDIBits fehlgeschlagen")
+    finally:
+        g.DeleteObject(bmp)
+        g.DeleteDC(mdc)
+        u.ReleaseDC(None, sdc)
+    data = hdr + bits.raw
+    hmem = k.GlobalAlloc(0x0002, len(data))                     # GMEM_MOVEABLE
+    if not hmem:
+        raise OSError("GlobalAlloc fehlgeschlagen")
+    p = k.GlobalLock(hmem)
+    ctypes.memmove(p, data, len(data))
+    k.GlobalUnlock(hmem)
+    for _ in range(10):                                         # Zwischenablage evtl. kurz belegt
+        if u.OpenClipboard(hwnd):                              # mit Besitzer, sonst scheitert SetClipboardData
+            break
+        time.sleep(0.05)
+    else:
+        k.GlobalFree(hmem)
+        raise OSError("Zwischenablage ist belegt")
+    try:
+        u.EmptyClipboard()
+        if not u.SetClipboardData(8, hmem):                     # CF_DIB; gehoert danach Windows
+            k.GlobalFree(hmem)
+            raise OSError("SetClipboardData fehlgeschlagen")
+    finally:
+        u.CloseClipboard()
+    return w, h
+
+
 # ---------------------------------------------------------------- Programmsymbol
 ICON_VERSION = 1          # erhoehen, wenn sich das Aussehen aendert (erzeugt .ico neu)
 
@@ -1642,6 +1808,7 @@ class TrayIcon:
         self.tip = ""
         self._skip_up = False
         self._menu_owner = None
+        self.last_error = 0
 
     # ------------------------------------------------ Symbol
     def _nid(self, flags):
@@ -1696,6 +1863,18 @@ class TrayIcon:
         if old:
             self.w.DestroyIcon(old)
         return self.added
+
+    def notify(self, title, text):
+        """Windows-Benachrichtigung (Sprechblase/Toast) ueber dieses Symbol."""
+        if not self.added:
+            return False
+        n = self._nid(0x10)                                     # NIF_INFO
+        n.szInfoTitle = title[:63]
+        n.szInfo = text[:255]
+        n.dwInfoFlags = 0x01                                    # NIIF_INFO
+        ok = bool(self.w.Shell_NotifyIconW(self.NIM_MODIFY, ctypes.byref(n)))
+        self.last_error = 0 if ok else ctypes.get_last_error()
+        return ok
 
     def remove(self):
         if self.added:
@@ -2136,6 +2315,9 @@ class App:
         self.menu.add_separator()
         self.menu.add_command(label=T("Einstellungen …"), command=self.open_settings)
         self.menu.add_command(label=T("Pause"), command=self.toggle_pause, accelerator=T("Pause-Taste"))
+        self.menu.add_command(label=T("Screenshot in die Zwischenablage"), command=self.screenshot,
+                              accelerator=T("Strg+C"),
+                              state="normal" if sys.platform == "win32" else "disabled")
         self.menu.add_command(label=T("Statistik zurücksetzen"), command=self.clear)
         self.var_window = tk.IntVar(value=int(float(self.cfg["window"])))
         self.win_menu = tk.Menu(self.menu, tearoff=0, bg=PANEL, fg=FG, activebackground=ACCENT,
@@ -2215,6 +2397,11 @@ class App:
         r.bind("<Right>", lambda e: self.scroll(-1))
         r.protocol("WM_DELETE_WINDOW", self.on_window_close)
         r.bind("<Pause>", lambda e: self.toggle_pause())
+        r.bind("<Control-c>", self.screenshot)
+        r.bind("<Control-C>", self.screenshot)
+        # Tastatur (Strg+C, Pfeile, +/-, Ende) braucht den Fokus: bei jedem Klick ins Fenster holen
+        r.bind("<ButtonPress-1>", self._take_focus, add="+")
+        r.bind("<ButtonPress-3>", self._take_focus, add="+")
         r.bind("<Configure>", self._root_configure, add="+")
         r.bind("<Unmap>", self._root_unmap, add="+")
 
@@ -2809,6 +2996,7 @@ class App:
             m.add_command(label=T("„{name}“ aus dem Autostart entfernen", name=name),
                           command=lambda: self.remove_autostart(auto))
         m.add_separator()
+        m.add_command(label=T("Verknüpfungen prüfen"), command=lambda: self.check_shortcuts())
         m.add_command(label=T("Autostart-Ordner öffnen"), command=lambda: os.startfile(startup_dir()))
 
     def make_shortcut(self, where):
@@ -2910,6 +3098,117 @@ class App:
             self.flash = T("Konfigurationsordner gewechselt")
             self.root.after(6000, self._end_flash)
             self.update_labels()
+            self.root.after(300, lambda: self.check_shortcuts(old_dir))
+
+    def _take_focus(self, event=None):
+        try:
+            if self.root.focus_get() is None:
+                self.root.focus_force()
+        except (tk.TclError, KeyError):
+            try:
+                self.root.focus_force()
+            except tk.TclError:
+                pass
+
+    # ------------------------------------------------------------ Screenshot
+    def screenshot(self, event=None):
+        if sys.platform != "win32":
+            return
+        # kurz warten, bis das Kontextmenue verschwunden und alles neu gezeichnet ist
+        self.root.after(250, self._do_screenshot)
+
+    def _do_screenshot(self):
+        name = config_name(self.cfg_path)
+        try:
+            self.root.update_idletasks()
+            w, h = copy_window_image(int(self.root.wm_frame(), 16))
+        except Exception as e:
+            write_log(self.cfg_path, f"Screenshot fehlgeschlagen: {type(e).__name__}: {e}")
+            self.error = T("Screenshot fehlgeschlagen: {e}", e=e)
+            self.update_labels()
+            return
+        write_log(self.cfg_path, f"Screenshot {w} x {h} in die Zwischenablage")
+        self.flash = T("Screenshot von „{name}“ in der Zwischenablage ({w} × {h})", name=name, w=w, h=h)
+        self.root.after(5000, self._end_flash)
+        self.update_labels()
+        self.notify(T("Screenshot von „{name}“ kopiert", name=name),
+                    T("Mit Strg+V z. B. in eine E-Mail oder ein Dokument einfügen."))
+
+    def notify(self, title, text):
+        """Windows-Benachrichtigung. Ohne Tray-Modus wird dafuer kurz ein Symbol im
+        Infobereich angelegt und nach 10 s wieder entfernt."""
+        try:
+            if self.tray and self.tray.added:
+                ok = self.tray.notify(title, text)
+                write_log(self.cfg_path, "Benachrichtigung " + ("an Windows übergeben (Tray)" if ok else
+                          f"abgelehnt (Tray, Fehler {self.tray.last_error})"))
+                return
+            if getattr(self, "_note_tray", None) is None:
+                t = TrayIcon(self)
+                pts = [(i, o) if i is not None else None for _, i, o in self.view_data()]
+                px = render_tray_icon(t.size, pts, self.scale_top(), self.cfg["color_in"],
+                                      self.cfg["color_out"], fill=self.cfg.get("fill", "in"))
+                t.refresh(px, f"{APP} {config_name(self.cfg_path)}")
+                self._note_tray = t
+            ok = self._note_tray.notify(title, text)
+            write_log(self.cfg_path, "Benachrichtigung " + ("an Windows übergeben (Hilfssymbol)" if ok else
+                      f"abgelehnt (Hilfssymbol, Fehler {self._note_tray.last_error})"))
+            if getattr(self, "_note_job", None):
+                self.root.after_cancel(self._note_job)
+            self._note_job = self.root.after(10000, self._end_note)
+        except Exception as e:
+            write_log(self.cfg_path, f"Benachrichtigung: {type(e).__name__}: {e}")
+
+    def _end_note(self):
+        self._note_job = None
+        t, self._note_tray = getattr(self, "_note_tray", None), None
+        if t:
+            t.remove()
+            if not self.tray and _TRAY.get("obj") is t:
+                _TRAY["obj"] = None
+
+    # ------------------------------------------------------------ Verknuepfungen pruefen
+    def check_shortcuts(self, old_dir=None):
+        """Verknuepfungen in Autostart/Desktop, die auf einen anderen Ordner zeigen, auf den
+        aktuellen Konfigurationsordner umstellen (nach Rueckfrage). Mit old_dir (nach einem
+        Ordnerwechsel) nur solche zum alten Ordner und ohne Meldung, wenn alles passt."""
+        from tkinter import messagebox
+        if sys.platform != "win32":
+            return
+        cur = os.path.dirname(self.cfg_path)
+        try:
+            found = stale_shortcuts(cur, old_dir)
+        except Exception as e:
+            write_log(self.cfg_path, f"Verknüpfungen prüfen: {e}")
+            if old_dir is None:
+                messagebox.showerror(APP, T("Verknüpfungen konnten nicht geprüft werden: {e}", e=e),
+                                     parent=self.root)
+            return
+        write_log(self.cfg_path, f"Verknüpfungen geprüft: {len(found)} veraltet")
+        if not found:
+            if old_dir is None:
+                messagebox.showinfo(APP, T("Alle FTG-Verknüpfungen in Autostart und auf dem Desktop "
+                                           "sind aktuell."), parent=self.root)
+            return
+        self.ensure_visible()
+        items = "\n".join(f"• {os.path.splitext(os.path.basename(p))[0]}  ({T('Autostart') if w == 'Startup' else T('Desktop')})"
+                          for p, w, _, _, _ in found)
+        if not messagebox.askyesno(
+                APP, T("Diese Verknüpfungen zeigen noch auf einen anderen Ordner:\n\n{items}\n\n"
+                       "Auf den Konfigurationsordner\n{d}\numstellen?", items=items, d=to_unc(cur)),
+                parent=self.root):
+            return
+        try:
+            update_shortcuts([(p, new) for p, _, _, new, _ in found])
+        except Exception as e:
+            write_log(self.cfg_path, f"Verknüpfungen umstellen: {e}")
+            messagebox.showerror(APP, str(e), parent=self.root)
+            return
+        for p, _, a, new, _ in found:
+            write_log(self.cfg_path, f"Verknüpfung umgestellt: {p}: {a} -> {new}")
+        self.flash = T("{n} Verknüpfung(en) umgestellt", n=len(found))
+        self.root.after(5000, self._end_flash)
+        self.update_labels()
 
     def restart(self):
         """Fenster neu starten (z. B. nach Wechsel der Sprache)."""
@@ -3004,6 +3303,8 @@ class App:
             self.save()
         write_log(self.cfg_path, "Ende")
         self.stop()
+        if getattr(self, "_note_tray", None):
+            self._note_tray.remove()
         if self.tray:
             self.tray.remove()
         self.root.destroy()
@@ -3363,6 +3664,8 @@ class App:
             pass
         u.bind("<Button-3>", self.show_menu)
         u.bind("<Double-Button-1>", lambda e: self.open_settings())
+        u.bind("<ButtonPress-1>", self._take_focus, add="+")    # Unterlage wird nie aktiv (NOACTIVATE)
+        u.bind("<ButtonPress-3>", self._take_focus, add="+")
         self.bind_move(u)
         self.bind_wheel(u)
         self.bind_side_buttons(u)
@@ -3816,8 +4119,18 @@ class SettingsDialog(tk.Toplevel):
                           bg=self.colors[key], activebackground=self.colors[key],
                           highlightthickness=1, highlightbackground=GRID_STRONG,
                           command=lambda k=key: self.pick_color(k))
-            b.pack(side="left", padx=(0, 18), ipady=1)
+            b.pack(side="left", padx=(0, 6 if key == "color_in" else 18), ipady=1)
             self.swatches[key] = b
+            if key == "color_in":
+                sw = tk.Button(cf, text="⇄", relief="flat", bd=0, cursor="hand2", bg=FIELD, fg=FG,
+                               activebackground=GRID_STRONG, activeforeground=FG,
+                               font=(FONT[0], FONT[1] + 2), highlightthickness=0,
+                               padx=5, pady=0, command=self.swap_colors)
+                sw.pack(side="left", padx=(0, 6), fill="y")   # so hoch wie die Farbfelder, nicht hoeher
+                self.btn_swap = sw
+                tip_text = T("Farben von In und Out tauschen")
+                sw.bind("<Enter>", lambda e: self.msg.config(text=tip_text, fg=FG_DIM))
+                sw.bind("<Leave>", lambda e: self.msg.cget("text") == tip_text and self.msg.config(text=""))
         self._button("Standard", self.reset_colors, cf).pack(side="left")
 
         label("Name im Graph", 11)
@@ -4105,6 +4418,11 @@ class SettingsDialog(tk.Toplevel):
     def set_color(self, key, hx):
         self.colors[key] = hx
         self.swatches[key].config(bg=hx, activebackground=hx)
+
+    def swap_colors(self):
+        a, b = self.colors["color_in"], self.colors["color_out"]
+        self.set_color("color_in", b)
+        self.set_color("color_out", a)
 
     def reset_colors(self):
         for k in ("color_in", "color_out", "color_label"):

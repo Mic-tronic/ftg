@@ -4,6 +4,17 @@ Version number in `ftg.pyw` (`VERSION`), shown in the settings dialog, briefly a
 in `ftg.log`. / Die Versionsnummer steht in `ftg.pyw` (`VERSION`), im Einstellungsfenster,
 kurz beim Start und im `ftg.log`.
 
+## 1.12.2 – 2026-11-06 – screenshot, colour swap, shortcut check / Screenshot, Farbtausch, Verknüpfungen
+- EN: Context menu “Screenshot to clipboard” copies the window as it appears on screen, with a
+  Windows notification. Settings: button ⇄ swaps the colours of In and Out. When the configuration
+  folder changes, FTG finds autostart and desktop shortcuts that still point to the old folder and
+  offers to update them; “Check shortcuts” in the shortcut menu does the same at any time.
+- DE: Kontextmenü „Screenshot in die Zwischenablage“ kopiert das Fenster so, wie es auf dem Bildschirm
+  aussieht, mit Windows-Benachrichtigung. Einstellungen: Knopf ⇄ tauscht die Farben von In und Out.
+  Beim Wechsel des Konfigurationsordners findet FTG Autostart- und Desktop-Verknüpfungen, die noch auf
+  den alten Ordner zeigen, und bietet das Umstellen an; „Verknüpfungen prüfen“ im Verknüpfungsmenü
+  macht das jederzeit.
+
 ## 1.11.0 – 2026-11-05 – backup copies / Sicherungskopien
 - EN: “Save configuration” is gone (settings are saved automatically anyway). New in the context menu:
   “Save backup copy” puts a copy into the subfolder `Backup` of the configuration folder,

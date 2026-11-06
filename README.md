@@ -35,7 +35,9 @@ Windows language, switchable in the settings.
 - **Arrange windows** (↓ ↑ → ←) and copy the window size between running windows
 - Configurations as JSON, optionally on a network share, saved automatically; backup copies
   can be saved and restored from the menu; SNMPv3 passwords protected with Windows DPAPI
-- Desktop / autostart shortcuts with FTG's own icon, created from the menu
+- Desktop / autostart shortcuts with FTG's own icon, created from the menu; outdated shortcuts
+  are detected when the configuration folder changes
+- Screenshot of a window to the clipboard (context menu), colours of In and Out swappable (⇄)
 
 ![Sum of several interfaces](docs/sum.png)
 
@@ -129,7 +131,9 @@ Windows-Sprache, umschaltbar in den Einstellungen.
 - Konfigurationen als JSON, auf Wunsch auf einem Netzlaufwerk, automatisch gespeichert;
   Sicherungskopien lassen sich im Menü speichern und wiederherstellen; SNMPv3-Passwörter per
   Windows-DPAPI geschützt
-- Verknüpfungen für Desktop und Autostart mit eigenem Symbol, direkt aus dem Menü
+- Verknüpfungen für Desktop und Autostart mit eigenem Symbol, direkt aus dem Menü; veraltete
+  Verknüpfungen werden beim Wechsel des Konfigurationsordners erkannt
+- Screenshot eines Fensters in die Zwischenablage (Kontextmenü), Farben von In und Out tauschbar (⇄)
 
 ![Einstellungen](docs/settings.png)
 
