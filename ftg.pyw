@@ -49,7 +49,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 
 APP = "FTG"
-VERSION = "1.12.2"         # Aenderungen: CHANGELOG.md
+VERSION = "1.14.0"         # Aenderungen: CHANGELOG.md
 APP_LONG = "FTG – Flexible Traffic Grapher"
 LOGNAME = "ftg.log"
 
@@ -238,7 +238,7 @@ EN = {
     "Nichts geändert": "Nothing changed",
     # Anzeige
     "Gespeichert: {name}": "Saved: {name}", "Pausiert": "Paused", " (nur Ansicht)": " (view only)",
-    "alle {i} s": "every {i} s", "{kind}-Zähler": "{kind} counters", "jetzt": "now",
+    "alle {i} s": "every {i} s", "{kind}-Zähler": "{kind} counters", "jetzt": "now", "keine Daten": "no data",
     "◀ zurückgeblättert {span}  ·  Ende = jetzt": "◀ scrolled back {span}  ·  End = now",
     "warte auf Daten …": "waiting for data …",
     "Infobereich nicht verfügbar: {e}": "Notification area not available: {e}",
@@ -1809,6 +1809,7 @@ class TrayIcon:
         self._skip_up = False
         self._menu_owner = None
         self.last_error = 0
+        self.retry = False                   # letzte Aktualisierung fehlgeschlagen -> wiederholen
 
     # ------------------------------------------------ Symbol
     def _nid(self, flags):
@@ -1859,10 +1860,17 @@ class TrayIcon:
             ok = self.w.Shell_NotifyIconW(self.NIM_MODIFY, ctypes.byref(self._nid(flags)))
         if not ok:
             ok = self.w.Shell_NotifyIconW(self.NIM_ADD, ctypes.byref(self._nid(flags)))
-        self.added = bool(ok)
+        self.last_error = 0 if ok else getattr(ctypes, "get_last_error", lambda: -1)()
+        # Schlaegt beides fehl (Explorer antwortet gerade nicht, z. B. beim Aufwachen aus dem
+        # Energiesparmodus), bleibt "added" wie es war und der naechste Aufruf versucht es
+        # wieder. Frueher galt das Symbol dann als entfernt und wurde nie mehr aktualisiert:
+        # es blieb mit dem letzten Bild (z. B. rotem Fehlerpunkt) stehen.
+        if ok:
+            self.added = True
+        self.retry = not ok
         if old:
             self.w.DestroyIcon(old)
-        return self.added
+        return bool(ok)
 
     def notify(self, title, text):
         """Windows-Benachrichtigung (Sprechblase/Toast) ueber dieses Symbol."""
@@ -1873,7 +1881,7 @@ class TrayIcon:
         n.szInfo = text[:255]
         n.dwInfoFlags = 0x01                                    # NIIF_INFO
         ok = bool(self.w.Shell_NotifyIconW(self.NIM_MODIFY, ctypes.byref(n)))
-        self.last_error = 0 if ok else ctypes.get_last_error()
+        self.last_error = 0 if ok else getattr(ctypes, "get_last_error", lambda: -1)()
         return ok
 
     def remove(self):
@@ -1905,6 +1913,7 @@ class TrayIcon:
             return 0
         if msg == self.msg_created and msg:                    # Explorer neu gestartet
             self.added = False
+            self.retry = True
             self.q.put(("readd",))
             return 0
         if msg == 0x0011:                                      # WM_QUERYENDSESSION
@@ -2116,9 +2125,31 @@ def lock_problem(cfg_path):
 def write_log(cfg_path, text):
     try:
         path = os.path.join(os.path.dirname(cfg_path), LOGNAME)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} "
-                    f"{os.path.basename(cfg_path)}: {text}\n")
+        line = (f"{time.strftime('%Y-%m-%d %H:%M:%S')} pid={os.getpid()} "
+                f"{os.path.basename(cfg_path)}: {text}\n").encode("utf-8")
+        with open(path, "ab") as f:
+            # Mehrere Fenster schreiben oft in derselben Sekunde (alle fragen im selben Takt
+            # ab). Ueber das Netzlaufwerk ueberschrieben sich die Zeilen dabei gegenseitig
+            # (verstuemmelte Zeilen, fehlende Eintraege) -> kurz das erste Byte sperren.
+            locked = False
+            if sys.platform == "win32":
+                import msvcrt
+                for _ in range(40):                       # hoechstens ~1 s warten
+                    try:
+                        f.seek(0)
+                        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                        locked = True
+                        break
+                    except OSError:
+                        time.sleep(0.025)
+            try:
+                f.seek(0, 2)
+                f.write(line)
+                f.flush()
+            finally:
+                if locked:
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
     except OSError:
         pass
 
@@ -2253,6 +2284,8 @@ class App:
         self.flash = ""
         self.frozen = None            # Anzeige-Stand waehrend der Pause
         self.offset = 0.0             # zurueckgeblaettert (Sekunden vor "jetzt")
+        self._mouse = None            # Mauszeiger ueber dem Graph (x, y im Canvas) -> Messwert anzeigen
+        self._geo = None              # Lage des Graphen aus dem letzten redraw (fuer die Mausanzeige)
         self.auto_paused = False      # Pause kam vom Zurueckblaettern
         self._hover = None
         self._save_job = None
@@ -2386,6 +2419,7 @@ class App:
             w.bind("<Button-3>", self.show_menu)
             w.bind("<Double-Button-1>", lambda e: self.open_settings())
         self.canvas.bind("<Configure>", lambda e: self.redraw())
+        self.canvas.bind("<Motion>", self._track_mouse, add="+")
         self.bind_wheel(self.canvas)
         self.bind_side_buttons(r)
         r.bind("<End>", lambda e: self.go_live())
@@ -2627,7 +2661,19 @@ class App:
         else:
             _, _, _, _, c_in, c_out = view_stats(list(self.data)[-1:])
             tip += f"\n▼ In   {fmt_rate(c_in, u)}\n▲ Out {fmt_rate(c_out, u)}"
-        self.tray.refresh(px, tip)
+        try:
+            ok = self.tray.refresh(px, tip)
+        except OSError as e:                     # Symbol liess sich nicht erzeugen
+            ok, self.tray.retry = False, True
+            self.tray.last_error = str(e)
+        # Fehlschlag und Erholung je einmal ins Log
+        if not ok and not getattr(self, "_tray_failed", False):
+            self._tray_failed = True
+            write_log(self.cfg_path, f"Tray-Symbol: Aktualisierung fehlgeschlagen (Fehler "
+                                     f"{self.tray.last_error}) – wird wiederholt")
+        elif ok and getattr(self, "_tray_failed", False):
+            self._tray_failed = False
+            write_log(self.cfg_path, "Tray-Symbol: Aktualisierung geht wieder")
 
     def window_hidden(self):
         return self.root.state() in ("withdrawn", "iconic")
@@ -3347,7 +3393,7 @@ class App:
             if not self.paused:                  # Graph bleibt in der Pause stehen
                 if not self.window_hidden():
                     self.redraw()
-                if self.tray_active():
+                if self.tray and (self.tray.added or self.tray.retry):
                     self.update_tray()
         # oft nachsehen, damit neue Werte sofort (und in allen Fenstern
         # gleichzeitig) gezeichnet werden
@@ -3666,6 +3712,7 @@ class App:
         u.bind("<Double-Button-1>", lambda e: self.open_settings())
         u.bind("<ButtonPress-1>", self._take_focus, add="+")    # Unterlage wird nie aktiv (NOACTIVATE)
         u.bind("<ButtonPress-3>", self._take_focus, add="+")
+        u.bind("<Motion>", self._track_mouse, add="+")              # Mausanzeige auch ueber durchsichtigem Hintergrund
         self.bind_move(u)
         self.bind_wheel(u)
         self.bind_side_buttons(u)
@@ -3762,10 +3809,27 @@ class App:
         except tk.TclError:
             pass
 
+    def _track_mouse(self, event=None):
+        """Mauszeiger ueber dem Graph verfolgen (per <Motion> und im 100-ms-Takt,
+        da Bewegungen ueber durchsichtigem Hintergrund bei der Unterlage ankommen)."""
+        c = self.canvas
+        try:
+            px, py = self.root.winfo_pointerxy()
+            mx, my = px - c.winfo_rootx(), py - c.winfo_rooty()
+            inside = 0 <= mx < c.winfo_width() and 0 <= my < c.winfo_height()
+        except tk.TclError:
+            return
+        pos = (mx, my) if inside else None
+        if pos != self._mouse:
+            self._mouse = pos
+            self.draw_hover()
+
     def _hover_poll(self):
         """Unter der Maus voll deckend (auch ueber durchsichtigen Stellen)."""
         try:
             self.sync_under()
+            if not self.window_hidden():
+                self._track_mouse()
             if ((self._look[0] < 100 or self.bg_on) and self.cfg.get("alpha_hover")
                     and not self.window_hidden() and not getattr(self, "_alpha_preview", False)):
                 r = self.root
@@ -3947,7 +4011,72 @@ class App:
             c.create_text(ml + gw / 2, mt + gh / 2, text="PAUSE", fill=FG_DIM, font=("Segoe UI", 16, "bold"))
         elif not pts and not self.error and self.cfg["host"]:
             c.create_text(ml + gw / 2, mt + gh / 2, text=T("warte auf Daten …"), fill=FG_DIM, font=FONT)
+        self._geo = (ml, mt, gw, gh, x_r, y_b, t_end, window, top, pts, dense)
+        self.draw_hover()
         self.draw_size_hint()
+
+    def draw_hover(self):
+        """Wie bei MRTG: unter dem Mauszeiger Uhrzeit (mit Sekunden) und die Werte
+        In/Out des Messwerts an dieser Stelle, mit Hilfslinie und Punkten."""
+        c = self.canvas
+        c.delete("hover")
+        if self._mouse is None or self._geo is None:
+            return
+        ml, mt, gw, gh, x_r, y_b, t_end, window, top, pts, dense = self._geo
+        mx, my = self._mouse
+        if not pts or not (ml <= mx <= x_r and mt <= my <= y_b):
+            return
+        want = t_end - (x_r - mx) / gw * window
+        # naechster Messwert (Zeitstempel sind aufsteigend)
+        lo, hi = 0, len(pts) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if pts[mid][0] < want:
+                lo = mid + 1
+            else:
+                hi = mid
+        k = min((i for i in (lo - 1, lo) if 0 <= i < len(pts)), key=lambda i: abs(pts[i][0] - want))
+        ts, vi, vo = pts[k]
+        step = max(0.2, float(self.cfg["interval"]))
+        if abs(ts - want) > max(step * 1.5, window / gw * 1.5):
+            vi = vo = None                          # an dieser Stelle gibt es keinen Messwert
+        x = x_r - (t_end - ts) / window * gw
+        if vi is not None and dense:
+            # wie die Kurve: hoechster Wert aller Messwerte in dieser Pixelspalte
+            col = int(x)
+            j = k
+            while j > 0 and int(x_r - (t_end - pts[j - 1][0]) / window * gw) == col:
+                j -= 1
+            for q in pts[j:]:
+                if int(x_r - (t_end - q[0]) / window * gw) != col:
+                    break
+                if q[1] is not None:
+                    vi, vo = max(vi, q[1]), max(vo, q[2])
+        u = self.cfg["unit"]
+        ci, co = self.cfg["color_in"], self.cfg["color_out"]
+        c.create_line(x, mt, x, y_b, fill=FG_DIM, dash=(2, 3), tags="hover")
+
+        def Y(v):
+            return y_b - min(v, top) / top * gh
+        if vi is not None:
+            for v, col in ((vi, ci), (vo, co)):
+                c.create_oval(x - 3, Y(v) - 3, x + 3, Y(v) + 3, fill=col, outline=BG, tags="hover")
+        lines = [(time.strftime("%H:%M:%S", time.localtime(ts)), FG)]
+        if vi is None:
+            lines.append((T("keine Daten"), FG_DIM))
+        else:
+            lines += [(f"▼ In   {fmt_rate(vi, u)}", ci), (f"▲ Out  {fmt_rate(vo, u)}", co)]
+        items = [c.create_text(0, 0, text=t, fill=col, font=FONT_SMALL, anchor="nw", tags="hover")
+                 for t, col in lines]
+        lh = max(c.bbox(i)[3] - c.bbox(i)[1] for i in items)
+        bw = max(c.bbox(i)[2] - c.bbox(i)[0] for i in items) + 12
+        bh = lh * len(items) + 8
+        bx = x + 10 if x + 10 + bw <= x_r else x - 10 - bw          # am rechten Rand links vom Zeiger
+        by = min(max(mt + 2, my - bh - 12), y_b - bh - 2)            # ueber dem Zeiger, im Graph
+        box = c.create_rectangle(bx, by, bx + bw, by + bh, fill=PANEL, outline=GRID_STRONG, tags="hover")
+        for n, i in enumerate(items):
+            c.coords(i, bx + 6, by + 4 + n * lh)
+        c.tag_lower(box, items[0])
 
     # ---------------------------------------------------------- Einstellungen
     def open_settings(self):
@@ -4114,13 +4243,16 @@ class SettingsDialog(tk.Toplevel):
         cf.grid(row=10, column=1, columnspan=2, sticky="w", pady=3)
         self.swatches = {}
         for key, txt in (("color_in", "In"), ("color_out", "Out"), ("color_label", "Name")):
-            tk.Label(cf, text=T(txt), bg=PANEL, fg=FG, font=FONT).pack(side="left", padx=(0, 6))
+            if key != "color_out":               # "Out" steht rechts von seinem Feld: In [■] ⇄ [■] Out
+                tk.Label(cf, text=T(txt), bg=PANEL, fg=FG, font=FONT).pack(side="left", padx=(0, 6))
             b = tk.Button(cf, width=4, relief="flat", bd=0, cursor="hand2",
                           bg=self.colors[key], activebackground=self.colors[key],
                           highlightthickness=1, highlightbackground=GRID_STRONG,
                           command=lambda k=key: self.pick_color(k))
-            b.pack(side="left", padx=(0, 6 if key == "color_in" else 18), ipady=1)
+            b.pack(side="left", padx=(0, 18 if key == "color_label" else 6), ipady=1)
             self.swatches[key] = b
+            if key == "color_out":
+                tk.Label(cf, text=T(txt), bg=PANEL, fg=FG, font=FONT).pack(side="left", padx=(0, 18))
             if key == "color_in":
                 sw = tk.Button(cf, text="⇄", relief="flat", bd=0, cursor="hand2", bg=FIELD, fg=FG,
                                activebackground=GRID_STRONG, activeforeground=FG,

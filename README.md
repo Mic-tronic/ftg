@@ -8,7 +8,7 @@
 
 *Missing **STG – SNMP Traffic Grapher**? FTG is a modern, open-source alternative inspired by the classic.*
 
-![FTG main window](docs/main.png)
+![FTG main window](docs/main_en.png)
 
 ### What it is
 FTG shows the live traffic of a network interface as a graph: incoming and outgoing,
@@ -27,6 +27,7 @@ Windows language, switchable in the settings.
 - **Sum of several interfaces** – e.g. all member ports of a software switch or all access
   ports of a switch, shown as one graph (`LAN · [7]`)
 - Graph with selectable fill (In, Out, both, none), current / Ø / max for the visible range
+- **Mouse-over readout** like MRTG: time (with seconds) and In / Out at the mouse position
 - **60 minutes of history in memory**: zoom the time range (Shift+wheel, wheel tilt, mouse
   side buttons, +/-) and scroll back in time (wheel, arrow keys); pause keeps measuring
 - **Synchronous polling** on the system clock – all windows move in step
@@ -39,7 +40,9 @@ Windows language, switchable in the settings.
   are detected when the configuration folder changes
 - Screenshot of a window to the clipboard (context menu), colours of In and Out swappable (⇄)
 
-![Sum of several interfaces](docs/sum.png)
+![Sum of several interfaces](docs/sum_en.png)
+
+![Settings](docs/settings_en.png)
 
 Tray icons (live graph, both filled, paused, error):
 
@@ -105,6 +108,8 @@ FTG is not affiliated with Fortinet or with the author of STG.
 
 *Du vermisst **STG – SNMP Traffic Grapher**? FTG ist eine moderne, quelloffene Alternative nach dem Vorbild des Klassikers.*
 
+![FTG Hauptfenster](docs/main_de.png)
+
 ### Was ist FTG?
 FTG zeigt den Live-Verkehr eines Netzwerk-Interfaces als Graph: ein- und ausgehend, aktuell /
 Durchschnitt / Maximum, jede Sekunde neu. Eine Langzeitstatistik gibt es bewusst nicht – nur
@@ -122,6 +127,7 @@ Windows-Sprache, umschaltbar in den Einstellungen.
 - **Summe mehrerer Interfaces** – z. B. alle Mitglieder eines Software-Switches oder alle
   Geräte-Ports eines Switches als ein Graph (`LAN · [7]`)
 - Füllung wählbar (In, Out, beide, keine), aktuell / Ø / max für den sichtbaren Ausschnitt
+- **Mausanzeige** wie bei MRTG: Uhrzeit (mit Sekunden) sowie In / Out an der Mausposition
 - **60 Minuten Verlauf im Speicher**: Zeitraum zoomen (Shift+Mausrad, Mausrad kippen,
   Maus-Seitentasten, +/-) und zurückblättern (Mausrad, Pfeiltasten); Pause misst weiter
 - **Synchrone Abfrage** im Takt der Systemuhr – alle Fenster laufen im Gleichschritt
@@ -135,7 +141,9 @@ Windows-Sprache, umschaltbar in den Einstellungen.
   Verknüpfungen werden beim Wechsel des Konfigurationsordners erkannt
 - Screenshot eines Fensters in die Zwischenablage (Kontextmenü), Farben von In und Out tauschbar (⇄)
 
-![Einstellungen](docs/settings.png)
+![Summe mehrerer Interfaces](docs/sum_de.png)
+
+![Einstellungen](docs/settings_de.png)
 
 ### Voraussetzungen
 - Windows 10 / 11 (unter Linux eingeschränkt lauffähig)

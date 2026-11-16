@@ -4,6 +4,25 @@ Version number in `ftg.pyw` (`VERSION`), shown in the settings dialog, briefly a
 in `ftg.log`. / Die Versionsnummer steht in `ftg.pyw` (`VERSION`), im Einstellungsfenster,
 kurz beim Start und im `ftg.log`.
 
+## 1.14.0 – 2026-11-16 – mouse-over readout / Mausanzeige
+- EN: Move the mouse over the graph to see, like in MRTG, the local time (with seconds) and the In and
+  Out values at that point, with a guide line and markers on both curves; gaps show “no data”. Works
+  while scrolled back and over a transparent background. Settings: the label “Out” now sits to the
+  right of its colour field (In [■] ⇄ [■] Out).
+- DE: Fährt man mit der Maus über den Graph, zeigt FTG wie bei MRTG an dieser Stelle die Uhrzeit
+  (mit Sekunden) und die Werte In und Out, mit Hilfslinie und Punkten auf beiden Kurven; über Lücken
+  steht „keine Daten“. Das geht auch beim Zurückblättern und über durchsichtigem Hintergrund.
+  Einstellungen: „Out“ steht jetzt rechts neben seinem Farbfeld (In [■] ⇄ [■] Out).
+
+## 1.12.3 – 2026-11-16 – fixes / Fehlerbehebungen
+- EN: A tray icon could keep showing an old error (red dot, tooltip) although polling had recovered,
+  if Windows rejected one icon update; FTG now retries. Several windows writing to `ftg.log` at the
+  same moment no longer overwrite each other's lines on a network share.
+- DE: Ein Tray-Symbol konnte einen alten Fehler (roter Punkt, Tooltip) weiter zeigen, obwohl die
+  Abfrage längst wieder lief, wenn Windows eine Aktualisierung des Symbols abgelehnt hatte; FTG
+  versucht es jetzt erneut. Schreiben mehrere Fenster gleichzeitig ins `ftg.log`, überschreiben sie
+  sich auf einem Netzlaufwerk nicht mehr gegenseitig.
+
 ## 1.12.2 – 2026-11-06 – screenshot, colour swap, shortcut check / Screenshot, Farbtausch, Verknüpfungen
 - EN: Context menu “Screenshot to clipboard” copies the window as it appears on screen, with a
   Windows notification. Settings: button ⇄ swaps the colours of In and Out. When the configuration
